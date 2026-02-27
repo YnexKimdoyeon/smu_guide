@@ -1,7 +1,9 @@
 'use client'
 
-import { Calendar, MessageCircle, MapPin, Bell, Phone, Users, LogOut, User } from 'lucide-react'
+import { useState } from 'react'
+import { Calendar, MessageCircle, MapPin, Bell, Phone, Users, LogOut, User, UserX } from 'lucide-react'
 import type { User as UserType } from '@/lib/store'
+import { authAPI } from '@/lib/api'
 
 export type AppId = 'timetable' | 'chat' | 'commute' | 'announcements' | 'phonebook' | 'friends'
 
@@ -21,6 +23,22 @@ const apps: { id: AppId; label: string; icon: typeof Calendar; color: string; bg
 ]
 
 export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false)
+  const [isWithdrawing, setIsWithdrawing] = useState(false)
+
+  const handleWithdraw = async () => {
+    if (isWithdrawing) return
+    setIsWithdrawing(true)
+    try {
+      await authAPI.withdraw()
+      alert('회원탈퇴가 완료되었습니다.')
+      onLogout()
+    } catch (error) {
+      alert('회원탈퇴 중 오류가 발생했습니다.')
+      setIsWithdrawing(false)
+    }
+  }
+
   return (
     <div className="fixed inset-0 bg-background flex flex-col">
       {/* Header - 고정 */}
@@ -84,8 +102,46 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
         <div className="py-6 text-center">
           <p className="text-xs text-muted-foreground">{'Sunmoon University Guide v1.0'}</p>
           <p className="text-xs text-muted-foreground mt-1">{'Developed by (주) 와이넥스'}</p>
+          <button
+            onClick={() => setShowWithdrawModal(true)}
+            className="mt-3 text-xs text-red-400 hover:text-red-500 underline"
+          >
+            회원탈퇴
+          </button>
         </div>
       </div>
+
+      {/* 회원탈퇴 확인 모달 */}
+      {showWithdrawModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-card rounded-2xl p-6 max-w-sm w-full shadow-xl">
+            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-red-100 mx-auto mb-4">
+              <UserX className="w-6 h-6 text-red-500" />
+            </div>
+            <h3 className="text-lg font-semibold text-center text-foreground mb-2">회원탈퇴</h3>
+            <p className="text-sm text-muted-foreground text-center mb-6">
+              정말 탈퇴하시겠습니까?<br />
+              모든 데이터가 삭제되며 복구할 수 없습니다.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowWithdrawModal(false)}
+                className="flex-1 py-2.5 rounded-xl bg-muted text-foreground font-medium hover:bg-muted/80 transition-colors"
+                disabled={isWithdrawing}
+              >
+                취소
+              </button>
+              <button
+                onClick={handleWithdraw}
+                disabled={isWithdrawing}
+                className="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-medium hover:bg-red-600 transition-colors disabled:opacity-50"
+              >
+                {isWithdrawing ? '처리중...' : '탈퇴하기'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

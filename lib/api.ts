@@ -98,6 +98,15 @@ export const authAPI = {
   logout: () => {
     removeToken()
   },
+
+  // 회원탈퇴
+  withdraw: async () => {
+    const result = await fetchAPI('/auth/withdraw', {
+      method: 'DELETE',
+    })
+    removeToken()
+    return result
+  },
 }
 
 // 시간표 API
