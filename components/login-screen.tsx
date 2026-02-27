@@ -115,6 +115,8 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
 
         <p className="text-xs text-muted-foreground text-center mt-6">
           {'Sunmoon University Guide v1.0'}
+          <br />
+          {'Developed by (주) 와이넥스'}
         </p>
       </div>
     </div>

@@ -82,7 +82,8 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
 
         {/* Bottom Branding */}
         <div className="py-6 text-center">
-          <p className="text-xs text-muted-foreground">{'Sunmoon University Guide'}</p>
+          <p className="text-xs text-muted-foreground">{'Sunmoon University Guide v1.0'}</p>
+          <p className="text-xs text-muted-foreground mt-1">{'Developed by (주) 와이넥스'}</p>
         </div>
       </div>
     </div>
