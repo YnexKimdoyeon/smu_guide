@@ -321,8 +321,8 @@ async def login_with_sunmoon(
 
             if not user_info["name"]:
                 raise HTTPException(
-                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                    detail="사용자 정보를 파싱할 수 없습니다"
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="아이디 또는 비밀번호가 올바르지 않습니다"
                 )
 
             # 5. 학적정보 페이지에서 실제 학번 가져오기
