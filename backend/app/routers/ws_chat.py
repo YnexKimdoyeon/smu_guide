@@ -168,14 +168,24 @@ async def websocket_random_chat(
             db.add(queue_entry)
             db.commit()
 
-        # 매칭 시도
-        partner = db.query(RandomChatQueue).filter(
+        # 매칭 시도 - 실제 연결된 유저만
+        partners = db.query(RandomChatQueue).filter(
             RandomChatQueue.user_id != user_id
-        ).first()
+        ).all()
 
-        if partner:
+        # 실제로 WebSocket 연결된 상대 찾기
+        connected_partner = None
+        for p in partners:
+            if p.user_id in manager.random_connections:
+                connected_partner = p
+                break
+            else:
+                # 연결 안된 유저는 대기열에서 제거
+                db.delete(p)
+
+        if connected_partner:
             # 매칭 성공 - 상대방 ID 먼저 저장
-            partner_user_id = partner.user_id
+            partner_user_id = connected_partner.user_id
 
             # 방 생성
             new_room = RandomChatRoom(
@@ -193,6 +203,8 @@ async def websocket_random_chat(
             db.commit()
             db.refresh(new_room)
             room_id = new_room.id
+        else:
+            db.commit()  # 정리된 대기열 저장
     finally:
         db.close()
 
