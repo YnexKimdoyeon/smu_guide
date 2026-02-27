@@ -148,9 +148,27 @@ def get_chat_rooms(
 
     all_rooms = [global_room] + subject_rooms
 
+    # 과목별 수강생 수 계산
+    subject_participant_counts = {}
+    if my_subject_keys:
+        # 각 과목 키에 해당하는 사용자 수 조회
+        all_schedules = db.query(Schedule).all()
+        for schedule in all_schedules:
+            key = generate_subject_key(schedule)
+            if key not in subject_participant_counts:
+                subject_participant_counts[key] = set()
+            subject_participant_counts[key].add(schedule.user_id)
+
     # 결과 구성
     result = []
     for room in all_rooms:
+        if room.room_type == "global":
+            # 전체 채팅방은 전체 사용자 수
+            participant_count = db.query(User).count()
+        else:
+            # 과목 채팅방은 해당 과목 수강생 수
+            participant_count = len(subject_participant_counts.get(room.subject_key, set()))
+
         result.append({
             "id": room.id,
             "name": room.name,
@@ -159,7 +177,7 @@ def get_chat_rooms(
             "subject_key": room.subject_key,
             "created_by": room.created_by,
             "created_at": room.created_at.isoformat() if room.created_at else None,
-            "participants": 1,
+            "participants": participant_count,
             "last_message": None,
             "last_time": None
         })
