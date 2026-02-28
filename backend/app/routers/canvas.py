@@ -169,8 +169,12 @@ async def login_canvas(username: str, password: str) -> dict:
         canvas_login_resp = await client.post(login_url, data=form_data, headers=headers)
 
         if "login_success=1" in str(canvas_login_resp.url) or ("canvas.sunmoon.ac.kr" in str(canvas_login_resp.url) and "login" not in str(canvas_login_resp.url).lower()):
-            # 쿠키 반환
-            return dict(client.cookies)
+            # Canvas 도메인 쿠키만 추출 (중복 방지)
+            canvas_cookies = {}
+            for cookie in client.cookies.jar:
+                if 'canvas.sunmoon.ac.kr' in (cookie.domain or ''):
+                    canvas_cookies[cookie.name] = cookie.value
+            return canvas_cookies
         else:
             raise HTTPException(status_code=401, detail="Canvas 로그인 실패")
 
