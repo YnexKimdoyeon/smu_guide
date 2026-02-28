@@ -9,6 +9,7 @@ import { CommuteScreen } from '@/components/commute-screen'
 import { AnnouncementsScreen } from '@/components/announcements-screen'
 import { PhonebookScreen } from '@/components/phonebook-screen'
 import { FriendsScreen } from '@/components/friends-screen'
+import { ElearningScreen } from '@/components/elearning-screen'
 import { authAPI, getToken, removeToken } from '@/lib/api'
 import type { User } from '@/lib/store'
 
@@ -110,6 +111,9 @@ export default function Home() {
       )}
       {currentScreen === 'friends' && (
         <FriendsScreen onBack={handleBack} />
+      )}
+      {currentScreen === 'elearning' && (
+        <ElearningScreen onBack={handleBack} />
       )}
     </div>
   )

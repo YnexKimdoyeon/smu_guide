@@ -404,3 +404,29 @@ export const blockAPI = {
     })
   },
 }
+
+// Canvas LMS API
+export const canvasAPI = {
+  // 세션 초기화
+  init: async (password: string) => {
+    return fetchAPI('/canvas/init', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    })
+  },
+
+  // 세션 상태 확인
+  getStatus: async () => {
+    return fetchAPI('/canvas/status')
+  },
+
+  // 할 일 목록 조회
+  getTodos: async () => {
+    return fetchAPI('/canvas/todos')
+  },
+
+  // 수강 과목 목록 조회
+  getCourses: async () => {
+    return fetchAPI('/canvas/courses')
+  },
+}
