@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Send, Users, ArrowLeft, Globe, BookOpen, Shuffle, X, Loader2, Ban, Flag, AlertTriangle } from 'lucide-react'
+import { Send, Users, ArrowLeft, Globe, BookOpen, Shuffle, X, Loader2, Ban, Flag, AlertTriangle, Settings, Trash2 } from 'lucide-react'
 import { AppShell } from './app-shell'
 import { chatAPI, randomChatAPI, blockAPI } from '@/lib/api'
 
@@ -144,6 +144,35 @@ export function ChatScreen({ onBack }: ChatScreenProps) {
     setShowReportModal(false)
     setReportReason('')
     setReportDetail('')
+  }
+
+  // 차단 관리 모달
+  const [showBlockListModal, setShowBlockListModal] = useState(false)
+  const [blockedUsers, setBlockedUsers] = useState<{id: number, blocked_user_id: number, anon_name: string, created_at: string}[]>([])
+  const [isLoadingBlocks, setIsLoadingBlocks] = useState(false)
+
+  const handleOpenBlockList = async () => {
+    setShowBlockListModal(true)
+    setIsLoadingBlocks(true)
+    try {
+      const data = await blockAPI.getBlockedUsers()
+      setBlockedUsers(data)
+    } catch (error) {
+      console.error('차단 목록 로딩 실패:', error)
+    } finally {
+      setIsLoadingBlocks(false)
+    }
+  }
+
+  const handleUnblock = async (blockedUserId: number) => {
+    try {
+      await blockAPI.unblockUser(blockedUserId)
+      setBlockedUsers(prev => prev.filter(u => u.blocked_user_id !== blockedUserId))
+      setBlockedUserIds(prev => prev.filter(id => id !== blockedUserId))
+      alert('차단이 해제되었습니다.')
+    } catch (error: any) {
+      alert(error.message || '차단 해제에 실패했습니다.')
+    }
   }
 
   useEffect(() => {
@@ -413,6 +442,13 @@ export function ChatScreen({ onBack }: ChatScreenProps) {
             </p>
           </div>
           <button
+            onClick={handleOpenBlockList}
+            className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center hover:bg-muted transition-colors"
+            title="차단 관리"
+          >
+            <Settings className="w-4 h-4 text-muted-foreground" />
+          </button>
+          <button
             onClick={handleDisconnectRandomChat}
             className="px-3 py-1.5 rounded-full bg-destructive/10 text-destructive text-xs font-medium hover:bg-destructive/20 transition-colors"
           >
@@ -597,6 +633,64 @@ export function ChatScreen({ onBack }: ChatScreenProps) {
             </div>
           </div>
         )}
+
+        {/* 차단 관리 모달 */}
+        {showBlockListModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowBlockListModal(false)}>
+            <div
+              className="bg-card rounded-2xl w-full max-w-sm p-5 animate-in zoom-in-95 duration-200 max-h-[70vh] flex flex-col"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
+                  <Ban className="w-5 h-5 text-orange-500" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-foreground">차단 관리</h3>
+                  <p className="text-xs text-muted-foreground">차단한 사용자 목록</p>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto">
+                {isLoadingBlocks ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : blockedUsers.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-sm text-muted-foreground">차단한 사용자가 없습니다</p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {blockedUsers.map(user => (
+                      <div key={user.id} className="flex items-center justify-between p-3 bg-secondary rounded-xl">
+                        <div>
+                          <p className="text-sm font-medium text-foreground">{user.anon_name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(user.created_at).toLocaleDateString('ko-KR')} 차단
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleUnblock(user.blocked_user_id)}
+                          className="px-3 py-1.5 rounded-lg bg-red-500/10 text-red-500 text-xs font-medium hover:bg-red-500/20 transition-colors"
+                        >
+                          해제
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={() => setShowBlockListModal(false)}
+                className="mt-4 w-full py-2.5 rounded-xl bg-secondary text-foreground font-medium hover:bg-muted transition-colors"
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
@@ -629,6 +723,13 @@ export function ChatScreen({ onBack }: ChatScreenProps) {
               {onlineCount > 0 && ` · 접속 ${onlineCount}명`}
             </p>
           </div>
+          <button
+            onClick={handleOpenBlockList}
+            className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center hover:bg-muted transition-colors"
+            title="차단 관리"
+          >
+            <Settings className="w-4 h-4 text-muted-foreground" />
+          </button>
         </div>
 
         {/* 메시지 영역 - 스크롤 */}
@@ -791,6 +892,64 @@ export function ChatScreen({ onBack }: ChatScreenProps) {
                   {isProcessing ? '처리중...' : '신고하기'}
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* 차단 관리 모달 */}
+        {showBlockListModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowBlockListModal(false)}>
+            <div
+              className="bg-card rounded-2xl w-full max-w-sm p-5 animate-in zoom-in-95 duration-200 max-h-[70vh] flex flex-col"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
+                  <Ban className="w-5 h-5 text-orange-500" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-foreground">차단 관리</h3>
+                  <p className="text-xs text-muted-foreground">차단한 사용자 목록</p>
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-y-auto">
+                {isLoadingBlocks ? (
+                  <div className="flex items-center justify-center py-8">
+                    <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : blockedUsers.length === 0 ? (
+                  <div className="text-center py-8">
+                    <p className="text-sm text-muted-foreground">차단한 사용자가 없습니다</p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {blockedUsers.map(user => (
+                      <div key={user.id} className="flex items-center justify-between p-3 bg-secondary rounded-xl">
+                        <div>
+                          <p className="text-sm font-medium text-foreground">{user.anon_name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(user.created_at).toLocaleDateString('ko-KR')} 차단
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => handleUnblock(user.blocked_user_id)}
+                          className="px-3 py-1.5 rounded-lg bg-red-500/10 text-red-500 text-xs font-medium hover:bg-red-500/20 transition-colors"
+                        >
+                          해제
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={() => setShowBlockListModal(false)}
+                className="mt-4 w-full py-2.5 rounded-xl bg-secondary text-foreground font-medium hover:bg-muted transition-colors"
+              >
+                닫기
+              </button>
             </div>
           </div>
         )}
