@@ -492,6 +492,111 @@ export function ChatScreen({ onBack }: ChatScreenProps) {
             </div>
           </div>
         )}
+
+        {/* 차단/신고 선택 모달 */}
+        {actionModal && !showReportModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={closeModals}>
+            <div
+              className="bg-card rounded-t-2xl w-full max-w-lg p-4 pb-8 animate-in slide-in-from-bottom duration-300"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="w-10 h-1 bg-muted-foreground/30 rounded-full mx-auto mb-4" />
+              <p className="text-center text-sm text-muted-foreground mb-4">{actionModal.userName}</p>
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={handleBlock}
+                  disabled={isProcessing}
+                  className="flex items-center gap-3 w-full p-4 rounded-xl bg-secondary hover:bg-muted transition-colors"
+                >
+                  <Ban className="w-5 h-5 text-orange-500" />
+                  <div className="text-left">
+                    <p className="text-sm font-medium text-foreground">차단하기</p>
+                    <p className="text-xs text-muted-foreground">이 사용자의 메시지를 더 이상 보지 않습니다</p>
+                  </div>
+                </button>
+                <button
+                  onClick={handleOpenReport}
+                  disabled={isProcessing}
+                  className="flex items-center gap-3 w-full p-4 rounded-xl bg-secondary hover:bg-muted transition-colors"
+                >
+                  <Flag className="w-5 h-5 text-red-500" />
+                  <div className="text-left">
+                    <p className="text-sm font-medium text-foreground">신고하기</p>
+                    <p className="text-xs text-muted-foreground">부적절한 행위를 신고합니다</p>
+                  </div>
+                </button>
+              </div>
+              <button
+                onClick={closeModals}
+                className="w-full mt-4 py-3 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 신고 모달 */}
+        {showReportModal && actionModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={closeModals}>
+            <div
+              className="bg-card rounded-2xl w-full max-w-sm p-5 animate-in zoom-in-95 duration-200"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                  <AlertTriangle className="w-5 h-5 text-red-500" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-foreground">신고하기</h3>
+                  <p className="text-xs text-muted-foreground">{actionModal.userName}</p>
+                </div>
+              </div>
+              <div className="mb-4">
+                <p className="text-xs font-medium text-muted-foreground mb-2">신고 사유</p>
+                <div className="flex flex-wrap gap-2">
+                  {REPORT_REASONS.map(reason => (
+                    <button
+                      key={reason.value}
+                      onClick={() => setReportReason(reason.value)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                        reportReason === reason.value
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-secondary text-foreground hover:bg-muted'
+                      }`}
+                    >
+                      {reason.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="mb-4">
+                <p className="text-xs font-medium text-muted-foreground mb-2">상세 내용 (선택)</p>
+                <textarea
+                  value={reportDetail}
+                  onChange={e => setReportDetail(e.target.value)}
+                  placeholder="추가적인 내용을 입력해주세요"
+                  className="w-full h-20 px-3 py-2 rounded-xl bg-secondary border border-border/50 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowReportModal(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-secondary text-foreground font-medium hover:bg-muted transition-colors"
+                >
+                  뒤로
+                </button>
+                <button
+                  onClick={handleReport}
+                  disabled={!reportReason || isProcessing}
+                  className="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-medium hover:bg-red-600 transition-colors disabled:opacity-50"
+                >
+                  {isProcessing ? '처리중...' : '신고하기'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
@@ -584,6 +689,111 @@ export function ChatScreen({ onBack }: ChatScreenProps) {
             </button>
           </div>
         </div>
+
+        {/* 차단/신고 선택 모달 */}
+        {actionModal && !showReportModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={closeModals}>
+            <div
+              className="bg-card rounded-t-2xl w-full max-w-lg p-4 pb-8 animate-in slide-in-from-bottom duration-300"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="w-10 h-1 bg-muted-foreground/30 rounded-full mx-auto mb-4" />
+              <p className="text-center text-sm text-muted-foreground mb-4">{actionModal.userName}</p>
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={handleBlock}
+                  disabled={isProcessing}
+                  className="flex items-center gap-3 w-full p-4 rounded-xl bg-secondary hover:bg-muted transition-colors"
+                >
+                  <Ban className="w-5 h-5 text-orange-500" />
+                  <div className="text-left">
+                    <p className="text-sm font-medium text-foreground">차단하기</p>
+                    <p className="text-xs text-muted-foreground">이 사용자의 메시지를 더 이상 보지 않습니다</p>
+                  </div>
+                </button>
+                <button
+                  onClick={handleOpenReport}
+                  disabled={isProcessing}
+                  className="flex items-center gap-3 w-full p-4 rounded-xl bg-secondary hover:bg-muted transition-colors"
+                >
+                  <Flag className="w-5 h-5 text-red-500" />
+                  <div className="text-left">
+                    <p className="text-sm font-medium text-foreground">신고하기</p>
+                    <p className="text-xs text-muted-foreground">부적절한 행위를 신고합니다</p>
+                  </div>
+                </button>
+              </div>
+              <button
+                onClick={closeModals}
+                className="w-full mt-4 py-3 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              >
+                취소
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* 신고 모달 */}
+        {showReportModal && actionModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={closeModals}>
+            <div
+              className="bg-card rounded-2xl w-full max-w-sm p-5 animate-in zoom-in-95 duration-200"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                  <AlertTriangle className="w-5 h-5 text-red-500" />
+                </div>
+                <div>
+                  <h3 className="text-base font-semibold text-foreground">신고하기</h3>
+                  <p className="text-xs text-muted-foreground">{actionModal.userName}</p>
+                </div>
+              </div>
+              <div className="mb-4">
+                <p className="text-xs font-medium text-muted-foreground mb-2">신고 사유</p>
+                <div className="flex flex-wrap gap-2">
+                  {REPORT_REASONS.map(reason => (
+                    <button
+                      key={reason.value}
+                      onClick={() => setReportReason(reason.value)}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                        reportReason === reason.value
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-secondary text-foreground hover:bg-muted'
+                      }`}
+                    >
+                      {reason.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="mb-4">
+                <p className="text-xs font-medium text-muted-foreground mb-2">상세 내용 (선택)</p>
+                <textarea
+                  value={reportDetail}
+                  onChange={e => setReportDetail(e.target.value)}
+                  placeholder="추가적인 내용을 입력해주세요"
+                  className="w-full h-20 px-3 py-2 rounded-xl bg-secondary border border-border/50 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setShowReportModal(false)}
+                  className="flex-1 py-2.5 rounded-xl bg-secondary text-foreground font-medium hover:bg-muted transition-colors"
+                >
+                  뒤로
+                </button>
+                <button
+                  onClick={handleReport}
+                  disabled={!reportReason || isProcessing}
+                  className="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-medium hover:bg-red-600 transition-colors disabled:opacity-50"
+                >
+                  {isProcessing ? '처리중...' : '신고하기'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
