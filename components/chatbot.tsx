@@ -105,17 +105,19 @@ export function Chatbot() {
 
   return (
     <>
-      {/* 챗봇 버튼 */}
-      <button
-        onClick={() => setIsOpen(true)}
-        className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-primary shadow-lg flex items-center justify-center hover:bg-primary/90 active:scale-95 transition-all z-40"
-      >
-        <MessageCircle className="w-6 h-6 text-primary-foreground" />
-      </button>
+      {/* 챗봇 버튼 - 챗봇이 닫혀있을 때만 표시 */}
+      {!isOpen && (
+        <button
+          onClick={() => setIsOpen(true)}
+          className="fixed bottom-6 right-6 w-14 h-14 rounded-full bg-primary shadow-lg flex items-center justify-center hover:bg-primary/90 active:scale-95 transition-all z-40"
+        >
+          <MessageCircle className="w-6 h-6 text-primary-foreground" />
+        </button>
+      )}
 
-      {/* 챗봇 창 */}
+      {/* 챗봇 창 - 하단 전체 */}
       {isOpen && (
-        <div className="fixed bottom-24 right-4 w-[calc(100%-2rem)] max-w-sm h-[70vh] max-h-[500px] bg-card rounded-2xl shadow-2xl border border-border/50 flex flex-col z-50 animate-in slide-in-from-bottom-4 duration-300 overflow-hidden">
+        <div className="fixed inset-x-0 bottom-0 h-[75vh] bg-card rounded-t-2xl shadow-2xl border-t border-border/50 flex flex-col z-50 animate-in slide-in-from-bottom duration-300 overflow-hidden">
           {/* 헤더 */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-border/50 bg-primary rounded-t-2xl">
             <div className="flex items-center gap-2">
@@ -213,7 +215,7 @@ export function Chatbot() {
               </div>
 
               {/* 입력창 */}
-              <div className="p-3 border-t border-border/50">
+              <div className="p-3 border-t border-border/50" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
                 <div className="flex items-center gap-2">
                   <input
                     type="text"
