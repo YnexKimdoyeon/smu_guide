@@ -408,10 +408,10 @@ export const blockAPI = {
 // Canvas LMS API
 export const canvasAPI = {
   // 세션 초기화
-  init: async (password: string) => {
+  init: async (username: string, password: string) => {
     return fetchAPI('/canvas/init', {
       method: 'POST',
-      body: JSON.stringify({ password }),
+      body: JSON.stringify({ username, password }),
     })
   },
 

@@ -47,7 +47,8 @@ interface ElearningScreenProps {
 
 export function ElearningScreen({ onBack }: ElearningScreenProps) {
   const [isSessionActive, setIsSessionActive] = useState(false)
-  const [showPasswordModal, setShowPasswordModal] = useState(false)
+  const [showLoginModal, setShowLoginModal] = useState(false)
+  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [isInitializing, setIsInitializing] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
@@ -68,12 +69,12 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
       if (status.active) {
         await loadData()
       } else {
-        setShowPasswordModal(true)
+        setShowLoginModal(true)
         setIsLoading(false)
       }
     } catch (err) {
       setIsSessionActive(false)
-      setShowPasswordModal(true)
+      setShowLoginModal(true)
       setIsLoading(false)
     }
   }
@@ -89,7 +90,7 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
     } catch (err: any) {
       if (err.message?.includes('세션')) {
         setIsSessionActive(false)
-        setShowPasswordModal(true)
+        setShowLoginModal(true)
       } else {
         setError('데이터를 불러오는 중 오류가 발생했습니다.')
       }
@@ -99,12 +100,13 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
   }
 
   const handleInitSession = async () => {
-    if (!password.trim() || isInitializing) return
+    if (!username.trim() || !password.trim() || isInitializing) return
     setIsInitializing(true)
     try {
-      await canvasAPI.init(password)
+      await canvasAPI.init(username, password)
       setIsSessionActive(true)
-      setShowPasswordModal(false)
+      setShowLoginModal(false)
+      setUsername('')
       setPassword('')
       await loadData()
     } catch (err: any) {
@@ -164,8 +166,8 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
     return acc
   }, { announcements: 0, movies: 0, assignments: 0, quizzes: 0, discussions: 0, todoCount: 0 })
 
-  // 비밀번호 모달
-  if (showPasswordModal) {
+  // 로그인 모달
+  if (showLoginModal) {
     return (
       <div className="fixed inset-0 bg-background flex flex-col z-50">
         <header className="flex-shrink-0 px-4 py-3 flex items-center gap-3 border-b border-border/50">
@@ -182,13 +184,20 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
           <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mb-4">
             <Lock className="w-8 h-8 text-primary" />
           </div>
-          <h3 className="text-lg font-semibold text-foreground mb-2">Canvas LMS 연결</h3>
+          <h3 className="text-lg font-semibold text-foreground mb-2">Canvas LMS 로그인</h3>
           <p className="text-sm text-muted-foreground text-center mb-6">
-            선문대 포털 비밀번호를 입력하여<br />E-러닝에 연결하세요
+            LMS 아이디와 비밀번호를 입력하세요<br />(학번이 아닌 LMS 계정)
           </p>
           <input
+            type="text"
+            placeholder="LMS 아이디"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            className="w-full max-w-xs h-12 px-4 rounded-xl bg-secondary border border-border/50 text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 mb-3"
+          />
+          <input
             type="password"
-            placeholder="포털 비밀번호"
+            placeholder="비밀번호"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleInitSession()}
@@ -196,7 +205,7 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
           />
           <button
             onClick={handleInitSession}
-            disabled={!password.trim() || isInitializing}
+            disabled={!username.trim() || !password.trim() || isInitializing}
             className="w-full max-w-xs h-12 rounded-xl bg-primary text-primary-foreground font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center justify-center gap-2"
           >
             {isInitializing ? (
@@ -205,7 +214,7 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
                 연결 중...
               </>
             ) : (
-              '연결하기'
+              '로그인'
             )}
           </button>
         </div>

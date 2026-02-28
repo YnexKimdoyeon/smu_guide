@@ -182,6 +182,7 @@ async def login_canvas(username: str, password: str) -> dict:
 
 
 class InitRequest(BaseModel):
+    username: str  # LMS 아이디 (학번 아님)
     password: str
 
 
@@ -192,7 +193,7 @@ async def init_canvas_session(
 ):
     """Canvas 세션 초기화"""
     try:
-        cookies = await login_canvas(current_user.student_id, request.password)
+        cookies = await login_canvas(request.username, request.password)
         canvas_session_cache[current_user.id] = cookies
         print(f"[Canvas] 세션 초기화 성공: user_id={current_user.id}")
         return {"message": "Canvas 세션이 초기화되었습니다"}

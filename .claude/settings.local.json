@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir /s /b \"C:\\\\Users\\\\user\\\\Desktop\\\\선문가이드\\\\app\\\\*.tsx\")",
+      "Bash(python -c:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "WebFetch(domain:www.swing2app.co.kr)",
+      "Bash(xargs:*)",
+      "Bash(git restore:*)"
+    ]
+  }
+}
