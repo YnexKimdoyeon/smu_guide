@@ -415,8 +415,9 @@ async def login_with_sunmoon(
             access_token = create_access_token(data={"sub": str(user.id)})
 
             # 8. GPT 세션 자동 초기화 (실패해도 로그인은 성공)
+            # GPT 로그인은 사용자가 입력한 로그인 ID를 사용해야 함 (학번이 아님)
             try:
-                gpt_cookies = await get_gpt_session(real_student_id, login_data.password)
+                gpt_cookies = await get_gpt_session(login_data.student_id, login_data.password)
                 gpt_session_cache[user.id] = gpt_cookies
                 print(f"[GPT] 세션 자동 초기화 성공: user_id={user.id}")
             except Exception as e:
