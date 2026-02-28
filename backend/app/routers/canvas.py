@@ -4,7 +4,7 @@
 import re
 import base64
 import httpx
-from typing import Optional
+from typing import Optional, Dict
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
@@ -23,19 +23,15 @@ except ImportError:
 
 router = APIRouter(prefix="/canvas", tags=["Canvas LMS"])
 
-# Canvas 세션 캐시 (user_id -> cookies dict)
-canvas_session_cache = {}
+# Canvas 세션 캐시 (user_id -> {cookies, xn_api_token})
+canvas_session_cache: Dict[int, dict] = {}
 
-# =========================
-# RSA 복호화 함수
-# =========================
 
 def decrypt_password(encrypted_b64: str, private_key_pem: str) -> Optional[str]:
     """JSEncrypt와 호환되는 RSA 복호화"""
     try:
         encrypted = base64.b64decode(encrypted_b64)
 
-        # PEM 형식 정리 (개행 추가)
         if "-----BEGIN RSA PRIVATE KEY-----" in private_key_pem:
             key_body = private_key_pem.replace("-----BEGIN RSA PRIVATE KEY-----", "").replace("-----END RSA PRIVATE KEY-----", "").strip()
             formatted_body = "\n".join([key_body[i:i+64] for i in range(0, len(key_body), 64)])
@@ -54,9 +50,11 @@ def decrypt_password(encrypted_b64: str, private_key_pem: str) -> Optional[str]:
 
 
 async def login_canvas(username: str, password: str) -> dict:
-    """Canvas LMS에 로그인하고 쿠키를 반환"""
+    """Canvas LMS에 로그인하고 세션 정보 반환"""
+    from bs4 import BeautifulSoup
+    from urllib.parse import urlparse, parse_qs, unquote
 
-    async with httpx.AsyncClient(follow_redirects=True, verify=False, timeout=30.0) as client:
+    async with httpx.AsyncClient(follow_redirects=True, verify=False, timeout=60.0) as client:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36'
         }
@@ -67,13 +65,12 @@ async def login_canvas(username: str, password: str) -> dict:
             headers=headers
         )
 
-        from bs4 import BeautifulSoup
         soup = BeautifulSoup(canvas_login_page.text, 'html.parser')
         auth_token_input = soup.find('input', {'name': 'authenticity_token'})
         authenticity_token = auth_token_input.get('value', '') if auth_token_input else ''
 
         if not authenticity_token:
-            raise HTTPException(status_code=401, detail="Canvas authenticity_token을 찾을 수 없습니다")
+            raise HTTPException(status_code=401, detail="authenticity_token을 찾을 수 없습니다")
 
         # 2. LMS SSO 로그인 페이지 접속
         gw_url = "https://lms.sunmoon.ac.kr/xn-sso/gw.php?login_type=standalone&callback_url=https%3A%2F%2Flms.sunmoon.ac.kr%2Flogin%2Fcallback"
@@ -81,7 +78,7 @@ async def login_canvas(username: str, password: str) -> dict:
 
         csrf_token = client.cookies.get('xn_sso_csrf_token_for_this_login', '')
         if not csrf_token:
-            raise HTTPException(status_code=401, detail="Canvas CSRF 토큰을 찾을 수 없습니다")
+            raise HTTPException(status_code=401, detail="CSRF 토큰을 찾을 수 없습니다")
 
         # 3. SSO 로그인 POST
         login_data = {
@@ -95,7 +92,7 @@ async def login_canvas(username: str, password: str) -> dict:
         login_resp = await client.post(gw_cb_url, data=login_data, headers=headers, follow_redirects=False)
 
         if login_resp.status_code != 302:
-            raise HTTPException(status_code=401, detail="Canvas SSO 로그인 실패")
+            raise HTTPException(status_code=401, detail="SSO 로그인 실패")
 
         redirect_url = login_resp.headers.get('Location', '')
 
@@ -103,13 +100,12 @@ async def login_canvas(username: str, password: str) -> dict:
         await client.get(redirect_url, headers=headers, follow_redirects=False)
 
         # result 토큰 추출
-        from urllib.parse import urlparse, parse_qs, unquote
         parsed = urlparse(redirect_url)
         params = parse_qs(parsed.query)
         result_token = params.get('result', [''])[0]
 
         if not result_token:
-            raise HTTPException(status_code=401, detail="Canvas result 토큰을 찾을 수 없습니다")
+            raise HTTPException(status_code=401, detail="Result 토큰을 찾을 수 없습니다")
 
         result_token_decoded = unquote(result_token)
 
@@ -118,7 +114,7 @@ async def login_canvas(username: str, password: str) -> dict:
         canvas_resp = await client.get(canvas_sso_url, params={'result': result_token_decoded}, headers=headers)
 
         if canvas_resp.status_code != 200:
-            raise HTTPException(status_code=401, detail="Canvas from_cc 실패")
+            raise HTTPException(status_code=401, detail="from_cc 실패")
 
         # loginCryption 파라미터 추출
         html = canvas_resp.text
@@ -128,7 +124,7 @@ async def login_canvas(username: str, password: str) -> dict:
         )
 
         if not cryption_match:
-            raise HTTPException(status_code=401, detail="Canvas loginCryption을 찾을 수 없습니다")
+            raise HTTPException(status_code=401, detail="loginCryption을 찾을 수 없습니다")
 
         encrypted_password = cryption_match.group(1)
         private_key = cryption_match.group(2)
@@ -137,14 +133,14 @@ async def login_canvas(username: str, password: str) -> dict:
         decrypted_password = decrypt_password(encrypted_password, private_key)
 
         if not decrypted_password:
-            raise HTTPException(status_code=401, detail="Canvas 비밀번호 복호화 실패")
+            raise HTTPException(status_code=401, detail="비밀번호 복호화 실패")
 
         # 폼 데이터 추출
         soup = BeautifulSoup(html, 'html.parser')
         form = soup.find('form')
 
         if not form:
-            raise HTTPException(status_code=401, detail="Canvas 로그인 폼을 찾을 수 없습니다")
+            raise HTTPException(status_code=401, detail="로그인 폼을 찾을 수 없습니다")
 
         action = form.get('action', '')
         inputs = form.find_all('input')
@@ -156,7 +152,6 @@ async def login_canvas(username: str, password: str) -> dict:
             if name:
                 form_data[name] = value
 
-        # 복호화된 비밀번호와 authenticity_token 설정
         form_data['pseudonym_session[password]'] = decrypted_password
         form_data['authenticity_token'] = authenticity_token
 
@@ -168,30 +163,59 @@ async def login_canvas(username: str, password: str) -> dict:
 
         canvas_login_resp = await client.post(login_url, data=form_data, headers=headers)
 
-        if "login_success=1" in str(canvas_login_resp.url) or ("canvas.sunmoon.ac.kr" in str(canvas_login_resp.url) and "login" not in str(canvas_login_resp.url).lower()):
-            # 7. learningx 세션 활성화를 위해 external_tools 페이지 접근
-            try:
-                await client.get(
-                    "https://canvas.sunmoon.ac.kr/accounts/1/external_tools/9?launch_type=global_navigation",
-                    headers=headers
-                )
-            except Exception:
-                pass  # 실패해도 계속 진행
-
-            # Canvas 및 LMS 도메인 쿠키 추출 (중복 시 마지막 값 사용)
-            all_cookies = {}
-            for cookie in client.cookies.jar:
-                domain = cookie.domain or ''
-                if 'canvas.sunmoon.ac.kr' in domain or 'lms.sunmoon.ac.kr' in domain or 'sunmoon.ac.kr' in domain:
-                    all_cookies[cookie.name] = cookie.value
-            print(f"[Canvas] 추출된 쿠키: {list(all_cookies.keys())}")
-            return all_cookies
-        else:
+        if not ("login_success=1" in str(canvas_login_resp.url) or ("canvas.sunmoon.ac.kr" in str(canvas_login_resp.url) and "login" not in str(canvas_login_resp.url).lower())):
             raise HTTPException(status_code=401, detail="Canvas 로그인 실패")
+
+        # 7. LTI 인증 - external_tools 페이지 접속
+        external_tools_url = "https://canvas.sunmoon.ac.kr/accounts/1/external_tools/9?launch_type=global_navigation"
+        tools_resp = await client.get(external_tools_url, headers=headers)
+
+        soup = BeautifulSoup(tools_resp.text, 'html.parser')
+        lti_form = soup.find('form')
+
+        if not lti_form:
+            raise HTTPException(status_code=401, detail="LTI 폼을 찾을 수 없습니다")
+
+        lti_action = lti_form.get('action', '')
+        lti_inputs = lti_form.find_all('input')
+        lti_data = {}
+
+        for inp in lti_inputs:
+            name = inp.get('name', '')
+            value = inp.get('value', '')
+            if name:
+                lti_data[name] = value
+
+        # 8. LTI dashboard로 POST
+        await client.post(lti_action, data=lti_data, headers=headers)
+
+        # xn_api_token 쿠키 추출
+        xn_api_token = None
+        for cookie in client.cookies.jar:
+            if cookie.name == 'xn_api_token':
+                xn_api_token = cookie.value
+                break
+
+        if not xn_api_token:
+            # 쿠키에서 직접 가져오기 시도
+            xn_api_token = client.cookies.get('xn_api_token', '')
+
+        # 모든 쿠키 추출
+        all_cookies = {}
+        for cookie in client.cookies.jar:
+            all_cookies[cookie.name] = cookie.value
+
+        print(f"[Canvas] 추출된 쿠키: {list(all_cookies.keys())}")
+        print(f"[Canvas] xn_api_token: {'있음' if xn_api_token else '없음'}")
+
+        return {
+            'cookies': all_cookies,
+            'xn_api_token': xn_api_token
+        }
 
 
 class InitRequest(BaseModel):
-    username: str  # LMS 아이디
+    username: str
     password: str
 
 
@@ -200,10 +224,10 @@ async def init_canvas_session(
     request: InitRequest,
     current_user: User = Depends(get_current_user)
 ):
-    """Canvas 세션 초기화 (수동 로그인용)"""
+    """Canvas 세션 초기화"""
     try:
-        cookies = await login_canvas(request.username, request.password)
-        canvas_session_cache[current_user.id] = cookies
+        session_data = await login_canvas(request.username, request.password)
+        canvas_session_cache[current_user.id] = session_data
         print(f"[Canvas] 세션 초기화 성공: user_id={current_user.id}")
         return {"message": "Canvas 세션이 초기화되었습니다"}
     except HTTPException:
@@ -230,15 +254,21 @@ async def get_canvas_todos(
     if user_id not in canvas_session_cache:
         raise HTTPException(status_code=401, detail="Canvas 세션이 필요합니다. 먼저 로그인하세요.")
 
-    cookies = canvas_session_cache[user_id]
+    session_data = canvas_session_cache[user_id]
+    cookies = session_data.get('cookies', {})
+    xn_api_token = session_data.get('xn_api_token', '')
 
     async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept': 'application/json'
+            'Accept': 'application/json',
+            'Referer': 'https://canvas.sunmoon.ac.kr/learningx/lti/dashboard'
         }
 
-        # term_ids[]=10 은 현재 학기
+        # xn_api_token을 Authorization 헤더로 사용
+        if xn_api_token:
+            headers['Authorization'] = f'Bearer {xn_api_token}'
+
         response = await client.get(
             "https://canvas.sunmoon.ac.kr/learningx/api/v1/learn_activities/to_dos",
             params={"term_ids[]": "10"},
@@ -247,9 +277,8 @@ async def get_canvas_todos(
         )
 
         if response.status_code != 200:
-            print(f"[Canvas] todos API 실패: status={response.status_code}, url={response.url}")
+            print(f"[Canvas] todos API 실패: status={response.status_code}")
             print(f"[Canvas] 응답: {response.text[:500]}")
-            # 세션 만료
             if user_id in canvas_session_cache:
                 del canvas_session_cache[user_id]
             raise HTTPException(status_code=401, detail="Canvas 세션이 만료되었습니다")
@@ -267,7 +296,8 @@ async def get_canvas_courses(
     if user_id not in canvas_session_cache:
         raise HTTPException(status_code=401, detail="Canvas 세션이 필요합니다.")
 
-    cookies = canvas_session_cache[user_id]
+    session_data = canvas_session_cache[user_id]
+    cookies = session_data.get('cookies', {})
 
     async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
         headers = {
