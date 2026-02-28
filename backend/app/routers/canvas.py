@@ -23,8 +23,38 @@ except ImportError:
 
 router = APIRouter(prefix="/canvas", tags=["Canvas LMS"])
 
-# Canvas 세션 캐시 (user_id -> {cookies, xn_api_token})
+# Canvas 세션 캐시 (user_id -> {cookies, xn_api_token, username, password})
 canvas_session_cache: Dict[int, dict] = {}
+
+
+async def ensure_canvas_session(user_id: int) -> dict:
+    """Canvas 세션 확인 및 필요시 재로그인"""
+    if user_id not in canvas_session_cache:
+        raise HTTPException(status_code=401, detail="Canvas 세션이 필요합니다. 먼저 로그인하세요.")
+
+    return canvas_session_cache[user_id]
+
+
+async def refresh_canvas_session(user_id: int) -> dict:
+    """저장된 자격 증명으로 Canvas 세션 갱신"""
+    if user_id not in canvas_session_cache:
+        raise HTTPException(status_code=401, detail="Canvas 세션이 필요합니다.")
+
+    session_data = canvas_session_cache[user_id]
+    username = session_data.get('username')
+    password = session_data.get('password')
+
+    if not username or not password:
+        raise HTTPException(status_code=401, detail="저장된 자격 증명이 없습니다.")
+
+    # 재로그인
+    new_session = await login_canvas(username, password)
+    new_session['username'] = username
+    new_session['password'] = password
+    canvas_session_cache[user_id] = new_session
+    print(f"[Canvas] 세션 자동 갱신 성공: user_id={user_id}")
+
+    return new_session
 
 
 def decrypt_password(encrypted_b64: str, private_key_pem: str) -> Optional[str]:
@@ -227,6 +257,9 @@ async def init_canvas_session(
     """Canvas 세션 초기화"""
     try:
         session_data = await login_canvas(request.username, request.password)
+        # 자격 증명 저장 (세션 만료 시 자동 갱신용)
+        session_data['username'] = request.username
+        session_data['password'] = request.password
         canvas_session_cache[current_user.id] = session_data
         print(f"[Canvas] 세션 초기화 성공: user_id={current_user.id}")
         return {"message": "Canvas 세션이 초기화되었습니다"}
@@ -244,17 +277,8 @@ async def get_canvas_status(current_user: User = Depends(get_current_user)):
     return {"active": is_active}
 
 
-@router.get("/todos")
-async def get_canvas_todos(
-    current_user: User = Depends(get_current_user)
-):
-    """Canvas 할 일 목록 조회"""
-    user_id = current_user.id
-
-    if user_id not in canvas_session_cache:
-        raise HTTPException(status_code=401, detail="Canvas 세션이 필요합니다. 먼저 로그인하세요.")
-
-    session_data = canvas_session_cache[user_id]
+async def _fetch_todos(session_data: dict) -> dict:
+    """todos API 호출 내부 함수"""
     cookies = session_data.get('cookies', {})
     xn_api_token = session_data.get('xn_api_token', '')
 
@@ -265,7 +289,6 @@ async def get_canvas_todos(
             'Referer': 'https://canvas.sunmoon.ac.kr/learningx/lti/dashboard'
         }
 
-        # xn_api_token을 Authorization 헤더로 사용
         if xn_api_token:
             headers['Authorization'] = f'Bearer {xn_api_token}'
 
@@ -276,27 +299,45 @@ async def get_canvas_todos(
             cookies=cookies
         )
 
-        if response.status_code != 200:
-            print(f"[Canvas] todos API 실패: status={response.status_code}")
-            print(f"[Canvas] 응답: {response.text[:500]}")
-            if user_id in canvas_session_cache:
-                del canvas_session_cache[user_id]
-            raise HTTPException(status_code=401, detail="Canvas 세션이 만료되었습니다")
-
-        return response.json()
+        return response
 
 
-@router.get("/courses")
-async def get_canvas_courses(
+@router.get("/todos")
+async def get_canvas_todos(
     current_user: User = Depends(get_current_user)
 ):
-    """Canvas 수강 과목 목록 조회"""
+    """Canvas 할 일 목록 조회 (세션 만료 시 자동 갱신)"""
     user_id = current_user.id
 
     if user_id not in canvas_session_cache:
-        raise HTTPException(status_code=401, detail="Canvas 세션이 필요합니다.")
+        raise HTTPException(status_code=401, detail="Canvas 세션이 필요합니다. 먼저 로그인하세요.")
 
     session_data = canvas_session_cache[user_id]
+
+    # 첫 번째 시도
+    response = await _fetch_todos(session_data)
+
+    # 실패 시 세션 갱신 후 재시도
+    if response.status_code != 200:
+        print(f"[Canvas] todos API 실패, 세션 갱신 시도: status={response.status_code}")
+        try:
+            session_data = await refresh_canvas_session(user_id)
+            response = await _fetch_todos(session_data)
+        except Exception as e:
+            print(f"[Canvas] 세션 갱신 실패: {e}")
+            if user_id in canvas_session_cache:
+                del canvas_session_cache[user_id]
+            raise HTTPException(status_code=401, detail="Canvas 세션이 만료되었습니다. 다시 로그인하세요.")
+
+    if response.status_code != 200:
+        print(f"[Canvas] todos API 재시도 실패: {response.text[:500]}")
+        raise HTTPException(status_code=401, detail="Canvas 세션이 만료되었습니다.")
+
+    return response.json()
+
+
+async def _fetch_courses(session_data: dict):
+    """courses API 호출 내부 함수"""
     cookies = session_data.get('cookies', {})
 
     async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
@@ -312,9 +353,37 @@ async def get_canvas_courses(
             cookies=cookies
         )
 
-        if response.status_code != 200:
+        return response
+
+
+@router.get("/courses")
+async def get_canvas_courses(
+    current_user: User = Depends(get_current_user)
+):
+    """Canvas 수강 과목 목록 조회 (세션 만료 시 자동 갱신)"""
+    user_id = current_user.id
+
+    if user_id not in canvas_session_cache:
+        raise HTTPException(status_code=401, detail="Canvas 세션이 필요합니다.")
+
+    session_data = canvas_session_cache[user_id]
+
+    # 첫 번째 시도
+    response = await _fetch_courses(session_data)
+
+    # 실패 시 세션 갱신 후 재시도
+    if response.status_code != 200:
+        print(f"[Canvas] courses API 실패, 세션 갱신 시도: status={response.status_code}")
+        try:
+            session_data = await refresh_canvas_session(user_id)
+            response = await _fetch_courses(session_data)
+        except Exception as e:
+            print(f"[Canvas] 세션 갱신 실패: {e}")
             if user_id in canvas_session_cache:
                 del canvas_session_cache[user_id]
-            raise HTTPException(status_code=401, detail="Canvas 세션이 만료되었습니다")
+            raise HTTPException(status_code=401, detail="Canvas 세션이 만료되었습니다.")
 
-        return response.json()
+    if response.status_code != 200:
+        raise HTTPException(status_code=401, detail="Canvas 세션이 만료되었습니다.")
+
+    return response.json()

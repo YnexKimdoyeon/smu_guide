@@ -428,6 +428,9 @@ async def login_with_sunmoon(
             # 9. Canvas LMS 세션 자동 초기화 (로그인 아이디가 LMS 아이디)
             try:
                 canvas_session = await login_canvas(login_data.student_id, login_data.password)
+                # 자격 증명 저장 (세션 만료 시 자동 갱신용)
+                canvas_session['username'] = login_data.student_id
+                canvas_session['password'] = login_data.password
                 canvas_session_cache[user.id] = canvas_session
                 print(f"[Canvas] 세션 자동 초기화 성공: user_id={user.id}")
             except Exception as e:
