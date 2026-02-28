@@ -83,12 +83,10 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
     try {
       const [todosData, coursesData] = await Promise.all([
         canvasAPI.getTodos(),
-        canvasAPI.getLearningxCourses()
+        canvasAPI.getCourses()
       ])
       setTodos(todosData.to_dos || [])
-      // learningx courses 응답 구조에 맞게 처리
-      const courseList = coursesData?.courses || coursesData || []
-      setCourses(courseList)
+      setCourses(coursesData || [])
     } catch (err: any) {
       if (err.message?.includes('세션')) {
         setIsSessionActive(false)

@@ -425,13 +425,8 @@ export const canvasAPI = {
     return fetchAPI('/canvas/todos')
   },
 
-  // 수강 과목 목록 조회 (Canvas)
+  // 수강 과목 목록 조회
   getCourses: async () => {
     return fetchAPI('/canvas/courses')
-  },
-
-  // Learningx 수강 과목 목록 조회 (todos와 매칭)
-  getLearningxCourses: async () => {
-    return fetchAPI('/canvas/learningx-courses')
   },
 }
