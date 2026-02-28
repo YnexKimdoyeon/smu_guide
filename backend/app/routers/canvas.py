@@ -169,12 +169,14 @@ async def login_canvas(username: str, password: str) -> dict:
         canvas_login_resp = await client.post(login_url, data=form_data, headers=headers)
 
         if "login_success=1" in str(canvas_login_resp.url) or ("canvas.sunmoon.ac.kr" in str(canvas_login_resp.url) and "login" not in str(canvas_login_resp.url).lower()):
-            # Canvas 도메인 쿠키만 추출 (중복 방지)
-            canvas_cookies = {}
+            # Canvas 및 LMS 도메인 쿠키 추출 (중복 시 마지막 값 사용)
+            all_cookies = {}
             for cookie in client.cookies.jar:
-                if 'canvas.sunmoon.ac.kr' in (cookie.domain or ''):
-                    canvas_cookies[cookie.name] = cookie.value
-            return canvas_cookies
+                domain = cookie.domain or ''
+                if 'canvas.sunmoon.ac.kr' in domain or 'lms.sunmoon.ac.kr' in domain or 'sunmoon.ac.kr' in domain:
+                    all_cookies[cookie.name] = cookie.value
+            print(f"[Canvas] 추출된 쿠키: {list(all_cookies.keys())}")
+            return all_cookies
         else:
             raise HTTPException(status_code=401, detail="Canvas 로그인 실패")
 
@@ -235,6 +237,8 @@ async def get_canvas_todos(
         )
 
         if response.status_code != 200:
+            print(f"[Canvas] todos API 실패: status={response.status_code}, url={response.url}")
+            print(f"[Canvas] 응답: {response.text[:500]}")
             # 세션 만료
             if user_id in canvas_session_cache:
                 del canvas_session_cache[user_id]
