@@ -49,7 +49,7 @@ session_cache = {}
 
 async def get_gpt_session(student_id: str, password: str) -> dict:
     """선문대 GPT 세션 획득"""
-    async with httpx.AsyncClient(follow_redirects=True, timeout=30.0) as client:
+    async with httpx.AsyncClient(follow_redirects=True, verify=False, timeout=30.0) as client:
         # 1. 로그인 페이지에서 토큰 가져오기
         login_page = await client.get(SWS_LOGIN_URL, headers=HEADERS)
 
@@ -139,7 +139,7 @@ async def chat_with_gpt(
         "rtype": 1
     }
 
-    async with httpx.AsyncClient(timeout=60.0) as client:
+    async with httpx.AsyncClient(verify=False, timeout=60.0) as client:
         response = await client.post(
             GPT_API_URL,
             headers=gpt_headers,
