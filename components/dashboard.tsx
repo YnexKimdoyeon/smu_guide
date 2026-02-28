@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Calendar, MessageCircle, MapPin, Bell, Phone, Users, LogOut, User, UserX } from 'lucide-react'
 import type { User as UserType } from '@/lib/store'
 import { authAPI } from '@/lib/api'
+import { Chatbot } from './chatbot'
 
 export type AppId = 'timetable' | 'chat' | 'commute' | 'announcements' | 'phonebook' | 'friends'
 
@@ -142,6 +143,9 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
           </div>
         </div>
       )}
+
+      {/* GPT 챗봇 */}
+      <Chatbot />
     </div>
   )
 }

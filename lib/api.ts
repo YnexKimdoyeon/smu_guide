@@ -339,6 +339,30 @@ export const randomChatAPI = {
   },
 }
 
+// GPT 챗봇 API
+export const gptAPI = {
+  // 세션 초기화
+  init: async (password: string) => {
+    return fetchAPI('/gpt/init', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    })
+  },
+
+  // 세션 상태 확인
+  getStatus: async () => {
+    return fetchAPI('/gpt/status')
+  },
+
+  // GPT와 대화
+  chat: async (messages: { role: string; content: string }[], rid: number = 1) => {
+    return fetchAPI('/gpt/chat', {
+      method: 'POST',
+      body: JSON.stringify({ messages, rid }),
+    })
+  },
+}
+
 // 차단/신고 API
 export const blockAPI = {
   // 사용자 차단
