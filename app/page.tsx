@@ -10,6 +10,7 @@ import { AnnouncementsScreen } from '@/components/announcements-screen'
 import { PhonebookScreen } from '@/components/phonebook-screen'
 import { FriendsScreen } from '@/components/friends-screen'
 import { ElearningScreen } from '@/components/elearning-screen'
+import { CalendarScreen } from '@/components/calendar-screen'
 import { authAPI, getToken, removeToken } from '@/lib/api'
 import type { User } from '@/lib/store'
 
@@ -114,6 +115,9 @@ export default function Home() {
       )}
       {currentScreen === 'elearning' && (
         <ElearningScreen onBack={handleBack} />
+      )}
+      {currentScreen === 'academic-calendar' && (
+        <CalendarScreen onBack={handleBack} />
       )}
     </div>
   )

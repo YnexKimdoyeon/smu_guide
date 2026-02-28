@@ -1,12 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { Calendar, MessageCircle, MapPin, Bell, Phone, Users, LogOut, User, UserX, GraduationCap } from 'lucide-react'
+import { Calendar, MessageCircle, MapPin, Bell, Phone, Users, LogOut, User, UserX, GraduationCap, CalendarDays } from 'lucide-react'
 import type { User as UserType } from '@/lib/store'
 import { authAPI } from '@/lib/api'
 import { Chatbot } from './chatbot'
 
-export type AppId = 'timetable' | 'chat' | 'commute' | 'announcements' | 'phonebook' | 'friends' | 'elearning'
+export type AppId = 'timetable' | 'chat' | 'commute' | 'announcements' | 'phonebook' | 'friends' | 'elearning' | 'academic-calendar'
 
 interface DashboardProps {
   user: UserType
@@ -17,6 +17,7 @@ interface DashboardProps {
 const apps: { id: AppId; label: string; icon: typeof Calendar; color: string; bgColor: string }[] = [
   { id: 'timetable', label: '내 시간표', icon: Calendar, color: '#3B82F6', bgColor: '#DBEAFE' },
   { id: 'elearning', label: 'E-러닝', icon: GraduationCap, color: '#6366F1', bgColor: '#E0E7FF' },
+  { id: 'academic-calendar', label: '학사일정', icon: CalendarDays, color: '#14B8A6', bgColor: '#CCFBF1' },
   { id: 'chat', label: '익명 채팅', icon: MessageCircle, color: '#0EA5E9', bgColor: '#E0F2FE' },
   { id: 'commute', label: '등하교 메이트', icon: MapPin, color: '#10B981', bgColor: '#D1FAE5' },
   { id: 'announcements', label: '공지사항', icon: Bell, color: '#F59E0B', bgColor: '#FEF3C7' },
