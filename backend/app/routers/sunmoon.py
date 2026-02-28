@@ -414,13 +414,14 @@ async def login_with_sunmoon(
             # 7. JWT 토큰 발급
             access_token = create_access_token(data={"sub": str(user.id)})
 
-            # 8. GPT 세션 자동 초기화 (백그라운드에서 실행, 실패해도 로그인은 성공)
+            # 8. GPT 세션 자동 초기화 (실패해도 로그인은 성공)
             try:
                 gpt_cookies = await get_gpt_session(real_student_id, login_data.password)
                 gpt_session_cache[user.id] = gpt_cookies
-            except Exception:
+                print(f"[GPT] 세션 자동 초기화 성공: user_id={user.id}")
+            except Exception as e:
                 # GPT 세션 실패해도 로그인은 정상 진행
-                pass
+                print(f"[GPT] 세션 자동 초기화 실패: {str(e)}")
 
             return SunmoonLoginResponse(
                 access_token=access_token,
