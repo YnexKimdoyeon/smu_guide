@@ -169,6 +169,15 @@ async def login_canvas(username: str, password: str) -> dict:
         canvas_login_resp = await client.post(login_url, data=form_data, headers=headers)
 
         if "login_success=1" in str(canvas_login_resp.url) or ("canvas.sunmoon.ac.kr" in str(canvas_login_resp.url) and "login" not in str(canvas_login_resp.url).lower()):
+            # 7. learningx 세션 활성화를 위해 external_tools 페이지 접근
+            try:
+                await client.get(
+                    "https://canvas.sunmoon.ac.kr/accounts/1/external_tools/9?launch_type=global_navigation",
+                    headers=headers
+                )
+            except Exception:
+                pass  # 실패해도 계속 진행
+
             # Canvas 및 LMS 도메인 쿠키 추출 (중복 시 마지막 값 사용)
             all_cookies = {}
             for cookie in client.cookies.jar:
@@ -182,7 +191,7 @@ async def login_canvas(username: str, password: str) -> dict:
 
 
 class InitRequest(BaseModel):
-    username: str  # LMS 아이디 (학번 아님)
+    username: str  # LMS 아이디
     password: str
 
 
@@ -191,7 +200,7 @@ async def init_canvas_session(
     request: InitRequest,
     current_user: User = Depends(get_current_user)
 ):
-    """Canvas 세션 초기화"""
+    """Canvas 세션 초기화 (수동 로그인용)"""
     try:
         cookies = await login_canvas(request.username, request.password)
         canvas_session_cache[current_user.id] = cookies
