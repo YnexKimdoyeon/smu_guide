@@ -9,6 +9,32 @@ interface Message {
   content: string
 }
 
+// URL을 링크로 변환하는 함수
+function renderMessageWithLinks(content: string) {
+  const urlRegex = /(https?:\/\/[^\s<>"{}|\\^`\[\]]+)/g
+  const parts = content.split(urlRegex)
+
+  return parts.map((part, index) => {
+    if (urlRegex.test(part)) {
+      // URL을 다시 테스트하기 위해 regex lastIndex 리셋
+      urlRegex.lastIndex = 0
+      return (
+        <a
+          key={index}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-400 underline hover:text-blue-300 break-all"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {part}
+        </a>
+      )
+    }
+    return part
+  })
+}
+
 export function Chatbot() {
   const [isOpen, setIsOpen] = useState(false)
   const [messages, setMessages] = useState<Message[]>([])
@@ -195,7 +221,7 @@ export function Chatbot() {
                         }`}
                         style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}
                       >
-                        {msg.content}
+                        {renderMessageWithLinks(msg.content)}
                       </div>
                     </div>
                   ))}
