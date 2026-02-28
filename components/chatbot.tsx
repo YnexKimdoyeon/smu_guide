@@ -115,7 +115,7 @@ export function Chatbot() {
 
       {/* 챗봇 창 */}
       {isOpen && (
-        <div className="fixed bottom-24 right-4 w-[calc(100%-2rem)] max-w-sm h-[70vh] max-h-[500px] bg-card rounded-2xl shadow-2xl border border-border/50 flex flex-col z-50 animate-in slide-in-from-bottom-4 duration-300">
+        <div className="fixed bottom-24 right-4 w-[calc(100%-2rem)] max-w-sm h-[70vh] max-h-[500px] bg-card rounded-2xl shadow-2xl border border-border/50 flex flex-col z-50 animate-in slide-in-from-bottom-4 duration-300 overflow-hidden">
           {/* 헤더 */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-border/50 bg-primary rounded-t-2xl">
             <div className="flex items-center gap-2">
@@ -173,8 +173,8 @@ export function Chatbot() {
           {/* 메시지 영역 */}
           {!showPasswordModal && (
             <>
-              <div className="flex-1 overflow-y-auto p-4">
-                <div className="flex flex-col gap-3">
+              <div className="flex-1 overflow-y-auto overflow-x-hidden p-4">
+                <div className="flex flex-col gap-3 min-w-0">
                   {messages.length === 0 && (
                     <div className="text-center py-8">
                       <p className="text-sm text-muted-foreground">무엇이든 물어보세요!</p>
@@ -183,14 +183,15 @@ export function Chatbot() {
                   {messages.map((msg, i) => (
                     <div
                       key={i}
-                      className={`flex flex-col max-w-[85%] ${msg.role === 'user' ? 'self-end items-end' : 'self-start items-start'}`}
+                      className={`flex flex-col max-w-[85%] min-w-0 ${msg.role === 'user' ? 'self-end items-end' : 'self-start items-start'}`}
                     >
                       <div
-                        className={`px-3 py-2 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap ${
+                        className={`px-3 py-2 rounded-2xl text-sm leading-relaxed whitespace-pre-wrap break-words overflow-hidden ${
                           msg.role === 'user'
                             ? 'bg-primary text-primary-foreground rounded-tr-md'
                             : 'bg-secondary text-foreground rounded-tl-md'
                         }`}
+                        style={{ wordBreak: 'break-word', overflowWrap: 'break-word' }}
                       >
                         {msg.content}
                       </div>
