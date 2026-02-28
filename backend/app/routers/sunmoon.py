@@ -13,6 +13,7 @@ from app.core.security import get_password_hash, create_access_token
 from app.models.user import User
 from app.models.schedule import Schedule
 from app.routers.gpt import get_gpt_session, session_cache as gpt_session_cache
+from app.routers.canvas import login_canvas, canvas_session_cache
 
 router = APIRouter(prefix="/sunmoon", tags=["선문대 연동"])
 
@@ -424,7 +425,13 @@ async def login_with_sunmoon(
                 # GPT 세션 실패해도 로그인은 정상 진행
                 print(f"[GPT] 세션 자동 초기화 실패: {str(e)}")
 
-            # Canvas LMS는 별도 아이디 사용하므로 자동 초기화 제외
+            # 9. Canvas LMS 세션 자동 초기화 (로그인 아이디가 LMS 아이디)
+            try:
+                canvas_cookies = await login_canvas(login_data.student_id, login_data.password)
+                canvas_session_cache[user.id] = canvas_cookies
+                print(f"[Canvas] 세션 자동 초기화 성공: user_id={user.id}")
+            except Exception as e:
+                print(f"[Canvas] 세션 자동 초기화 실패: {str(e)}")
 
             return SunmoonLoginResponse(
                 access_token=access_token,
