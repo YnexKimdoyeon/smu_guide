@@ -8,6 +8,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
 from app.models.chat import ChatRoom, ChatRoomMember, ChatMessage
+from app.models.block import UserBlock
 from app.models.schedule import Schedule
 from app.schemas.chat import ChatRoomCreate, ChatRoomResponse, ChatMessageCreate, ChatMessageResponse
 
@@ -243,8 +244,16 @@ def get_chat_messages(
             detail="이 채팅방에 접근할 수 없습니다"
         )
 
+    # 차단한 사용자 목록 조회
+    blocked_ids = db.query(UserBlock.blocked_user_id).filter(
+        UserBlock.user_id == current_user.id
+    ).all()
+    blocked_user_ids = [b[0] for b in blocked_ids]
+
+    # 차단된 사용자의 메시지 제외
     messages = db.query(ChatMessage).filter(
-        ChatMessage.room_id == room_id
+        ChatMessage.room_id == room_id,
+        ~ChatMessage.user_id.in_(blocked_user_ids) if blocked_user_ids else True
     ).order_by(ChatMessage.created_at).all()
 
     result = []

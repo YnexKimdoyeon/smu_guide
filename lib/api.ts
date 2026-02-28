@@ -338,3 +338,45 @@ export const randomChatAPI = {
     return fetchAPI(`/random-chat/room-status/${roomId}`)
   },
 }
+
+// 차단/신고 API
+export const blockAPI = {
+  // 사용자 차단
+  blockUser: async (blockedUserId: number) => {
+    return fetchAPI('/block/block', {
+      method: 'POST',
+      body: JSON.stringify({ blocked_user_id: blockedUserId }),
+    })
+  },
+
+  // 차단 해제
+  unblockUser: async (blockedUserId: number) => {
+    return fetchAPI(`/block/block/${blockedUserId}`, {
+      method: 'DELETE',
+    })
+  },
+
+  // 차단 목록 조회
+  getBlockedUsers: async () => {
+    return fetchAPI('/block/blocks')
+  },
+
+  // 차단 ID 목록 조회
+  getBlockedIds: async () => {
+    return fetchAPI('/block/blocked-ids')
+  },
+
+  // 사용자 신고
+  reportUser: async (data: {
+    reported_user_id: number
+    reason: string
+    detail?: string
+    message_id?: number
+    room_type?: string
+  }) => {
+    return fetchAPI('/block/report', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+}

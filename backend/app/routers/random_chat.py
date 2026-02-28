@@ -198,6 +198,7 @@ def get_random_chat_messages(
         result.append(RandomChatMessageResponse(
             id=msg.id,
             room_id=msg.room_id,
+            user_id=msg.user_id,
             message=msg.message,
             sender="나" if msg.user_id == current_user.id else "익명",
             is_mine=msg.user_id == current_user.id,
@@ -242,6 +243,7 @@ def send_random_chat_message(
     return RandomChatMessageResponse(
         id=new_message.id,
         room_id=new_message.room_id,
+        user_id=new_message.user_id,
         message=new_message.message,
         sender="나",
         is_mine=True,

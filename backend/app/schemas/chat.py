@@ -61,6 +61,7 @@ class RandomChatMessageCreate(BaseModel):
 class RandomChatMessageResponse(BaseModel):
     id: int
     room_id: int
+    user_id: int
     message: str
     sender: str
     is_mine: bool = False

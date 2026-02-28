@@ -281,6 +281,7 @@ async def websocket_random_chat(
                 await manager.send_to_user(partner_id, {
                     "type": "message",
                     "id": msg_id,
+                    "user_id": user_id,
                     "sender": "상대방",
                     "message": message_text,
                     "created_at": msg_time,
@@ -291,6 +292,7 @@ async def websocket_random_chat(
                 await manager.send_personal(websocket, {
                     "type": "message",
                     "id": msg_id,
+                    "user_id": user_id,
                     "sender": "나",
                     "message": message_text,
                     "created_at": msg_time,

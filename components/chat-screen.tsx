@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Send, Users, ArrowLeft, Globe, BookOpen, Shuffle, X, Loader2 } from 'lucide-react'
+import { Send, Users, ArrowLeft, Globe, BookOpen, Shuffle, X, Loader2, Ban, Flag, AlertTriangle } from 'lucide-react'
 import { AppShell } from './app-shell'
-import { chatAPI, randomChatAPI } from '@/lib/api'
+import { chatAPI, randomChatAPI, blockAPI } from '@/lib/api'
 
 interface ChatRoom {
   id: number
@@ -17,11 +17,27 @@ interface ChatRoom {
 
 interface ChatMessage {
   id: number
+  user_id?: number
   sender: string
   message: string
   created_at: string
   is_mine: boolean
 }
+
+interface UserAction {
+  userId: number
+  userName: string
+  messageId?: number
+  roomType: 'chat' | 'random'
+}
+
+const REPORT_REASONS = [
+  { value: 'spam', label: '스팸/광고' },
+  { value: 'abuse', label: '욕설/비방' },
+  { value: 'harassment', label: '성희롱/괴롭힘' },
+  { value: 'inappropriate', label: '부적절한 내용' },
+  { value: 'other', label: '기타' },
+]
 
 interface ChatScreenProps {
   onBack: () => void
@@ -48,6 +64,87 @@ export function ChatScreen({ onBack }: ChatScreenProps) {
   const [partnerLeft, setPartnerLeft] = useState(false)
   const [randomRoomId, setRandomRoomId] = useState<number | null>(null)
   const randomWsRef = useRef<WebSocket | null>(null)
+
+  // 차단/신고 모달 상태
+  const [actionModal, setActionModal] = useState<UserAction | null>(null)
+  const [showReportModal, setShowReportModal] = useState(false)
+  const [reportReason, setReportReason] = useState('')
+  const [reportDetail, setReportDetail] = useState('')
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [blockedUserIds, setBlockedUserIds] = useState<number[]>([])
+
+  // 차단 목록 로드
+  useEffect(() => {
+    const loadBlockedUsers = async () => {
+      try {
+        const data = await blockAPI.getBlockedIds()
+        setBlockedUserIds(data.blocked_ids || [])
+      } catch (error) {
+        console.error('차단 목록 로딩 실패:', error)
+      }
+    }
+    loadBlockedUsers()
+  }, [])
+
+  const handleUserClick = (userId: number, userName: string, messageId?: number, roomType: 'chat' | 'random' = 'chat') => {
+    if (userName === '나') return
+    setActionModal({ userId, userName, messageId, roomType })
+  }
+
+  const handleBlock = async () => {
+    if (!actionModal || isProcessing) return
+    setIsProcessing(true)
+    try {
+      await blockAPI.blockUser(actionModal.userId)
+      setBlockedUserIds(prev => [...prev, actionModal.userId])
+      // 차단된 사용자의 메시지 필터링
+      if (actionModal.roomType === 'chat') {
+        setMessages(prev => prev.filter(m => m.user_id !== actionModal.userId))
+      } else {
+        setRandomMessages(prev => prev.filter(m => m.user_id !== actionModal.userId))
+      }
+      alert('차단되었습니다.')
+      setActionModal(null)
+    } catch (error: any) {
+      alert(error.message || '차단에 실패했습니다.')
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  const handleOpenReport = () => {
+    setShowReportModal(true)
+  }
+
+  const handleReport = async () => {
+    if (!actionModal || !reportReason || isProcessing) return
+    setIsProcessing(true)
+    try {
+      await blockAPI.reportUser({
+        reported_user_id: actionModal.userId,
+        reason: reportReason,
+        detail: reportDetail || undefined,
+        message_id: actionModal.messageId,
+        room_type: actionModal.roomType,
+      })
+      alert('신고가 접수되었습니다.')
+      setShowReportModal(false)
+      setReportReason('')
+      setReportDetail('')
+      setActionModal(null)
+    } catch (error: any) {
+      alert(error.message || '신고에 실패했습니다.')
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  const closeModals = () => {
+    setActionModal(null)
+    setShowReportModal(false)
+    setReportReason('')
+    setReportDetail('')
+  }
 
   useEffect(() => {
     const fetchRooms = async () => {
@@ -118,8 +215,11 @@ export function ChatScreen({ onBack }: ChatScreenProps) {
 
       if (data.type === 'message') {
         const userId = parseInt(localStorage.getItem('user_id') || '0')
+        // 차단된 사용자의 메시지는 무시
+        if (blockedUserIds.includes(data.user_id)) return
         setMessages(prev => [...prev, {
           id: data.id,
+          user_id: data.user_id,
           sender: data.user_id === userId ? '나' : data.sender,
           message: data.message,
           created_at: data.created_at,
@@ -188,6 +288,7 @@ export function ChatScreen({ onBack }: ChatScreenProps) {
       } else if (data.type === 'message') {
         setRandomMessages(prev => [...prev, {
           id: data.id,
+          user_id: data.user_id,
           sender: data.sender,
           message: data.message,
           created_at: data.created_at,
@@ -333,7 +434,12 @@ export function ChatScreen({ onBack }: ChatScreenProps) {
                   className={`flex flex-col max-w-[80%] ${msg.is_mine ? 'self-end items-end' : 'self-start items-start'}`}
                 >
                   {!msg.is_mine && (
-                    <span className="text-[10px] text-muted-foreground mb-1 ml-1">{msg.sender}</span>
+                    <button
+                      onClick={() => msg.user_id && handleUserClick(msg.user_id, msg.sender, msg.id, 'random')}
+                      className="text-[10px] text-muted-foreground mb-1 ml-1 hover:text-primary hover:underline transition-colors"
+                    >
+                      {msg.sender}
+                    </button>
                   )}
                   <div
                     className={`px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed ${
@@ -434,7 +540,12 @@ export function ChatScreen({ onBack }: ChatScreenProps) {
                   className={`flex flex-col max-w-[80%] ${msg.is_mine ? 'self-end items-end' : 'self-start items-start'}`}
                 >
                   {!msg.is_mine && (
-                    <span className="text-[10px] text-muted-foreground mb-1 ml-1">{msg.sender}</span>
+                    <button
+                      onClick={() => msg.user_id && handleUserClick(msg.user_id, msg.sender, msg.id, 'chat')}
+                      className="text-[10px] text-muted-foreground mb-1 ml-1 hover:text-primary hover:underline transition-colors"
+                    >
+                      {msg.sender}
+                    </button>
                   )}
                   <div
                     className={`px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed ${
@@ -590,6 +701,114 @@ export function ChatScreen({ onBack }: ChatScreenProps) {
           </div>
         )}
       </div>
+
+      {/* 차단/신고 선택 모달 */}
+      {actionModal && !showReportModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={closeModals}>
+          <div
+            className="bg-card rounded-t-2xl w-full max-w-lg p-4 pb-8 animate-in slide-in-from-bottom duration-300"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="w-10 h-1 bg-muted-foreground/30 rounded-full mx-auto mb-4" />
+            <p className="text-center text-sm text-muted-foreground mb-4">{actionModal.userName}</p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={handleBlock}
+                disabled={isProcessing}
+                className="flex items-center gap-3 w-full p-4 rounded-xl bg-secondary hover:bg-muted transition-colors"
+              >
+                <Ban className="w-5 h-5 text-orange-500" />
+                <div className="text-left">
+                  <p className="text-sm font-medium text-foreground">차단하기</p>
+                  <p className="text-xs text-muted-foreground">이 사용자의 메시지를 더 이상 보지 않습니다</p>
+                </div>
+              </button>
+              <button
+                onClick={handleOpenReport}
+                disabled={isProcessing}
+                className="flex items-center gap-3 w-full p-4 rounded-xl bg-secondary hover:bg-muted transition-colors"
+              >
+                <Flag className="w-5 h-5 text-red-500" />
+                <div className="text-left">
+                  <p className="text-sm font-medium text-foreground">신고하기</p>
+                  <p className="text-xs text-muted-foreground">부적절한 행위를 신고합니다</p>
+                </div>
+              </button>
+            </div>
+            <button
+              onClick={closeModals}
+              className="w-full mt-4 py-3 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              취소
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 신고 모달 */}
+      {showReportModal && actionModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={closeModals}>
+          <div
+            className="bg-card rounded-2xl w-full max-w-sm p-5 animate-in zoom-in-95 duration-200"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 text-red-500" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-foreground">신고하기</h3>
+                <p className="text-xs text-muted-foreground">{actionModal.userName}</p>
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <p className="text-xs font-medium text-muted-foreground mb-2">신고 사유</p>
+              <div className="flex flex-wrap gap-2">
+                {REPORT_REASONS.map(reason => (
+                  <button
+                    key={reason.value}
+                    onClick={() => setReportReason(reason.value)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                      reportReason === reason.value
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-secondary text-foreground hover:bg-muted'
+                    }`}
+                  >
+                    {reason.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <p className="text-xs font-medium text-muted-foreground mb-2">상세 내용 (선택)</p>
+              <textarea
+                value={reportDetail}
+                onChange={e => setReportDetail(e.target.value)}
+                placeholder="추가적인 내용을 입력해주세요"
+                className="w-full h-20 px-3 py-2 rounded-xl bg-secondary border border-border/50 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowReportModal(false)}
+                className="flex-1 py-2.5 rounded-xl bg-secondary text-foreground font-medium hover:bg-muted transition-colors"
+              >
+                뒤로
+              </button>
+              <button
+                onClick={handleReport}
+                disabled={!reportReason || isProcessing}
+                className="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-medium hover:bg-red-600 transition-colors disabled:opacity-50"
+              >
+                {isProcessing ? '처리중...' : '신고하기'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </AppShell>
   )
 }
