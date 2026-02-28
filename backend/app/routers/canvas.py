@@ -387,3 +387,58 @@ async def get_canvas_courses(
         raise HTTPException(status_code=401, detail="Canvas 세션이 만료되었습니다.")
 
     return response.json()
+
+
+async def _fetch_learningx_courses(session_data: dict):
+    """learningx courses API 호출"""
+    cookies = session_data.get('cookies', {})
+    xn_api_token = session_data.get('xn_api_token', '')
+
+    async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'application/json',
+            'Referer': 'https://canvas.sunmoon.ac.kr/learningx/lti/dashboard'
+        }
+
+        if xn_api_token:
+            headers['Authorization'] = f'Bearer {xn_api_token}'
+
+        # term_id=10은 현재 학기
+        response = await client.get(
+            "https://canvas.sunmoon.ac.kr/learningx/api/v1/courses",
+            params={"term_id": "10"},
+            headers=headers,
+            cookies=cookies
+        )
+
+        return response
+
+
+@router.get("/learningx-courses")
+async def get_learningx_courses(
+    current_user: User = Depends(get_current_user)
+):
+    """Learningx 수강 과목 목록 조회 (todos와 매칭되는 course_id 사용)"""
+    user_id = current_user.id
+
+    if user_id not in canvas_session_cache:
+        raise HTTPException(status_code=401, detail="Canvas 세션이 필요합니다.")
+
+    session_data = canvas_session_cache[user_id]
+
+    response = await _fetch_learningx_courses(session_data)
+
+    if response.status_code != 200:
+        print(f"[Canvas] learningx courses API 실패, 세션 갱신 시도")
+        try:
+            session_data = await refresh_canvas_session(user_id)
+            response = await _fetch_learningx_courses(session_data)
+        except Exception as e:
+            print(f"[Canvas] 세션 갱신 실패: {e}")
+            raise HTTPException(status_code=401, detail="Canvas 세션이 만료되었습니다.")
+
+    if response.status_code != 200:
+        raise HTTPException(status_code=401, detail="Canvas 세션이 만료되었습니다.")
+
+    return response.json()
