@@ -38,6 +38,12 @@ export function Chatbot() {
       setIsSessionActive(status.active)
       if (!status.active) {
         setShowPasswordModal(true)
+      } else if (messages.length === 0) {
+        // 세션이 이미 활성화되어 있고 메시지가 없으면 환영 메시지 추가
+        setMessages([{
+          role: 'assistant',
+          content: '안녕하세요! 선문대 GPT입니다. 무엇이든 물어보세요.'
+        }])
       }
     } catch (error) {
       setIsSessionActive(false)

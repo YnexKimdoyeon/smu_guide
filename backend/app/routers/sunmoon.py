@@ -12,6 +12,7 @@ from app.core.database import get_db
 from app.core.security import get_password_hash, create_access_token
 from app.models.user import User
 from app.models.schedule import Schedule
+from app.routers.gpt import get_gpt_session, session_cache as gpt_session_cache
 
 router = APIRouter(prefix="/sunmoon", tags=["선문대 연동"])
 
@@ -412,6 +413,14 @@ async def login_with_sunmoon(
 
             # 7. JWT 토큰 발급
             access_token = create_access_token(data={"sub": str(user.id)})
+
+            # 8. GPT 세션 자동 초기화 (백그라운드에서 실행, 실패해도 로그인은 성공)
+            try:
+                gpt_cookies = await get_gpt_session(real_student_id, login_data.password)
+                gpt_session_cache[user.id] = gpt_cookies
+            except Exception:
+                # GPT 세션 실패해도 로그인은 정상 진행
+                pass
 
             return SunmoonLoginResponse(
                 access_token=access_token,
