@@ -611,20 +611,20 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
                       showMyMeetings ? 'bg-pink-500 text-white' : 'bg-card text-muted-foreground border border-border/50'
                     }`}
                   >
-                    내 과팅 ({myMeetings.length})
+                    내 과팅 ({myMeetings.filter(m => m.status === 'matched').length})
                   </button>
                 </div>
 
-                {(showMyMeetings ? myMeetings : meetings).length === 0 ? (
+                {(showMyMeetings ? myMeetings.filter(m => m.status === 'matched') : meetings).length === 0 ? (
                   <div className="text-center py-20">
                     <Heart className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                     <p className="text-muted-foreground">
-                      {showMyMeetings ? '등록한 과팅이 없습니다' : '등록된 과팅이 없습니다'}
+                      {showMyMeetings ? '매칭된 과팅이 없습니다' : '등록된 과팅이 없습니다'}
                     </p>
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {(showMyMeetings ? myMeetings : meetings).map(meeting => (
+                    {(showMyMeetings ? myMeetings.filter(m => m.status === 'matched') : meetings).map(meeting => (
                       <div
                         key={meeting.id}
                         className={`bg-card rounded-xl p-4 border ${
