@@ -97,6 +97,14 @@ def can_access_room(db: Session, user_id: int, room: ChatRoom) -> bool:
         user_keys = get_user_subject_keys(db, user_id)
         return room.subject_key in user_keys
 
+    # meeting 타입 등 멤버십 기반 채팅방
+    if room.room_type == "meeting":
+        member = db.query(ChatRoomMember).filter(
+            ChatRoomMember.room_id == room.id,
+            ChatRoomMember.user_id == user_id
+        ).first()
+        return member is not None
+
     return False
 
 

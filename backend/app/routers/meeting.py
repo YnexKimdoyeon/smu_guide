@@ -65,13 +65,14 @@ async def get_my_meetings(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """내가 작성한 과팅 목록"""
-    meetings = db.query(Meeting).filter(
+    """내가 작성한 과팅 목록 + 내가 신청해서 매칭된 과팅"""
+    # 내가 작성한 과팅
+    my_meetings = db.query(Meeting).filter(
         Meeting.user_id == current_user.id
     ).order_by(Meeting.created_at.desc()).all()
 
     result = []
-    for meeting in meetings:
+    for meeting in my_meetings:
         result.append({
             "id": meeting.id,
             "user_id": meeting.user_id,
@@ -82,8 +83,32 @@ async def get_my_meetings(
             "chat_room_id": meeting.chat_room_id,
             "created_at": meeting.created_at.isoformat() if meeting.created_at else "",
             "application_count": len(meeting.applications),
-            "is_mine": True
+            "is_mine": True,
+            "is_applicant": False
         })
+
+    # 내가 신청해서 매칭된 과팅
+    matched_applications = db.query(MeetingApplication).filter(
+        MeetingApplication.user_id == current_user.id,
+        MeetingApplication.is_matched == 1
+    ).all()
+
+    for app in matched_applications:
+        meeting = app.meeting
+        if meeting:
+            result.append({
+                "id": meeting.id,
+                "user_id": meeting.user_id,
+                "department": meeting.department,
+                "member_count": meeting.member_count,
+                "description": meeting.description,
+                "status": meeting.status,
+                "chat_room_id": meeting.chat_room_id,
+                "created_at": meeting.created_at.isoformat() if meeting.created_at else "",
+                "application_count": len(meeting.applications),
+                "is_mine": False,
+                "is_applicant": True
+            })
 
     return result
 
