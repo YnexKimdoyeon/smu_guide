@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ArrowLeft, BookOpen, Video, FileText, MessageSquare, CheckCircle2, Clock, AlertCircle, RefreshCw, Lock, Loader2 } from 'lucide-react'
+import { ArrowLeft, BookOpen, Video, FileText, MessageSquare, CheckCircle2, Clock, AlertCircle, RefreshCw, Lock, Loader2, Bell, X, ChevronRight } from 'lucide-react'
 import { canvasAPI } from '@/lib/api'
 
 interface TodoItem {
@@ -41,8 +41,52 @@ interface Course {
   course_code?: string
 }
 
+interface Announcement {
+  id: number
+  title: string
+  message: string
+  posted_at: string
+  user_name: string
+}
+
+interface AnnouncementDetail {
+  title: string
+  author: string
+  course_name: string
+  content: string
+}
+
 interface ElearningScreenProps {
   onBack: () => void
+}
+
+// Canvas 자격 증명 저장/조회 (자동 재로그인용)
+const CANVAS_CREDS_KEY = 'canvas_credentials'
+
+const saveCanvasCredentials = (username: string, password: string) => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(CANVAS_CREDS_KEY, JSON.stringify({ username, password }))
+  }
+}
+
+const getCanvasCredentials = (): { username: string; password: string } | null => {
+  if (typeof window !== 'undefined') {
+    const stored = localStorage.getItem(CANVAS_CREDS_KEY)
+    if (stored) {
+      try {
+        return JSON.parse(stored)
+      } catch {
+        return null
+      }
+    }
+  }
+  return null
+}
+
+const clearCanvasCredentials = () => {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem(CANVAS_CREDS_KEY)
+  }
 }
 
 export function ElearningScreen({ onBack }: ElearningScreenProps) {
@@ -55,10 +99,38 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
   const [todos, setTodos] = useState<CourseTodo[]>([])
   const [courses, setCourses] = useState<Course[]>([])
   const [error, setError] = useState<string | null>(null)
+  const [autoLoginAttempted, setAutoLoginAttempted] = useState(false)
+
+  // 공지사항 관련 상태
+  const [showAnnouncementsList, setShowAnnouncementsList] = useState(false)
+  const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null)
+  const [announcements, setAnnouncements] = useState<Announcement[]>([])
+  const [loadingAnnouncements, setLoadingAnnouncements] = useState(false)
+  const [showAnnouncementDetail, setShowAnnouncementDetail] = useState(false)
+  const [announcementDetail, setAnnouncementDetail] = useState<AnnouncementDetail | null>(null)
+  const [loadingDetail, setLoadingDetail] = useState(false)
 
   useEffect(() => {
     checkSessionAndLoad()
   }, [])
+
+  // 저장된 자격 증명으로 자동 로그인 시도
+  const tryAutoLogin = async (): Promise<boolean> => {
+    const creds = getCanvasCredentials()
+    if (!creds) return false
+
+    try {
+      console.log('[Canvas] 자동 재로그인 시도...')
+      await canvasAPI.init(creds.username, creds.password)
+      console.log('[Canvas] 자동 재로그인 성공')
+      setIsSessionActive(true)
+      return true
+    } catch (err) {
+      console.log('[Canvas] 자동 재로그인 실패, 자격 증명 삭제')
+      clearCanvasCredentials()
+      return false
+    }
+  }
 
   const checkSessionAndLoad = async () => {
     setIsLoading(true)
@@ -69,11 +141,29 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
       if (status.active) {
         await loadData()
       } else {
+        // 세션이 없으면 저장된 자격 증명으로 자동 로그인 시도
+        if (!autoLoginAttempted) {
+          setAutoLoginAttempted(true)
+          const success = await tryAutoLogin()
+          if (success) {
+            await loadData()
+            return
+          }
+        }
         setShowLoginModal(true)
         setIsLoading(false)
       }
     } catch (err) {
       setIsSessionActive(false)
+      // 에러 시에도 자동 로그인 시도
+      if (!autoLoginAttempted) {
+        setAutoLoginAttempted(true)
+        const success = await tryAutoLogin()
+        if (success) {
+          await loadData()
+          return
+        }
+      }
       setShowLoginModal(true)
       setIsLoading(false)
     }
@@ -88,7 +178,25 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
       setTodos(todosData.to_dos || [])
       setCourses(coursesData || [])
     } catch (err: any) {
-      if (err.message?.includes('세션')) {
+      if (err.message?.includes('세션') || err.message?.includes('401')) {
+        // 세션 만료 시 자동 재로그인 시도
+        console.log('[Canvas] 세션 만료 감지, 자동 재로그인 시도...')
+        const success = await tryAutoLogin()
+        if (success) {
+          // 재로그인 성공하면 데이터 다시 로드
+          try {
+            const [todosData, coursesData] = await Promise.all([
+              canvasAPI.getTodos(),
+              canvasAPI.getCourses()
+            ])
+            setTodos(todosData.to_dos || [])
+            setCourses(coursesData || [])
+            setIsLoading(false)
+            return
+          } catch {
+            // 재시도도 실패하면 로그인 모달
+          }
+        }
         setIsSessionActive(false)
         setShowLoginModal(true)
       } else {
@@ -104,6 +212,8 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
     setIsInitializing(true)
     try {
       await canvasAPI.init(username, password)
+      // 로그인 성공 시 자격 증명 저장 (자동 재로그인용)
+      saveCanvasCredentials(username, password)
       setIsSessionActive(true)
       setShowLoginModal(false)
       setUsername('')
@@ -141,6 +251,11 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
     }
   }
 
+  const formatPostedDate = (dateStr: string): string => {
+    const date = new Date(dateStr)
+    return date.toLocaleDateString('ko-KR', { year: 'numeric', month: 'short', day: 'numeric' })
+  }
+
   const getComponentIcon = (type: string, commonsType?: string) => {
     if (commonsType === 'mp4' || type === 'movie') {
       return <Video className="w-4 h-4" />
@@ -150,6 +265,44 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
       return <MessageSquare className="w-4 h-4" />
     }
     return <BookOpen className="w-4 h-4" />
+  }
+
+  // 과목별 공지사항 목록 조회
+  const handleViewAnnouncements = async (courseId: number) => {
+    setSelectedCourseId(courseId)
+    setShowAnnouncementsList(true)
+    setLoadingAnnouncements(true)
+    setAnnouncements([])
+
+    try {
+      const data = await canvasAPI.getCourseAnnouncements(courseId)
+      setAnnouncements(data || [])
+    } catch (err: any) {
+      console.error('공지사항 목록 조회 실패:', err)
+      alert('공지사항을 불러오지 못했습니다.')
+    } finally {
+      setLoadingAnnouncements(false)
+    }
+  }
+
+  // 공지사항 상세 조회
+  const handleViewAnnouncementDetail = async (topicId: number) => {
+    if (!selectedCourseId) return
+
+    setShowAnnouncementDetail(true)
+    setLoadingDetail(true)
+    setAnnouncementDetail(null)
+
+    try {
+      const data = await canvasAPI.getAnnouncement(selectedCourseId, topicId)
+      setAnnouncementDetail(data)
+    } catch (err: any) {
+      console.error('공지사항 상세 조회 실패:', err)
+      alert('공지사항 내용을 불러오지 못했습니다.')
+      setShowAnnouncementDetail(false)
+    } finally {
+      setLoadingDetail(false)
+    }
   }
 
   // 할 일이 있는 과목만 필터링
@@ -165,6 +318,116 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
     acc.todoCount += course.todo_list.length
     return acc
   }, { announcements: 0, movies: 0, assignments: 0, quizzes: 0, discussions: 0, todoCount: 0 })
+
+  // 공지사항 상세 모달
+  if (showAnnouncementDetail && announcementDetail) {
+    return (
+      <div className="fixed inset-0 bg-background flex flex-col z-50">
+        <header className="flex-shrink-0 px-4 py-3 flex items-center gap-3 border-b border-border/50">
+          <button
+            onClick={() => setShowAnnouncementDetail(false)}
+            className="w-10 h-10 rounded-full bg-card flex items-center justify-center hover:bg-muted transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5 text-foreground" />
+          </button>
+          <h1 className="text-lg font-semibold text-foreground truncate flex-1">공지사항</h1>
+        </header>
+
+        <div className="flex-1 overflow-y-auto">
+          {loadingDetail ? (
+            <div className="flex items-center justify-center h-full">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+          ) : (
+            <div className="p-4">
+              <div className="bg-card rounded-2xl border border-border/50 overflow-hidden">
+                <div className="p-4 border-b border-border/30">
+                  <h2 className="text-lg font-semibold text-foreground mb-2">
+                    {announcementDetail.title}
+                  </h2>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <span>{announcementDetail.author}</span>
+                    {announcementDetail.course_name && (
+                      <>
+                        <span>·</span>
+                        <span className="truncate">{announcementDetail.course_name}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <div
+                  className="p-4 prose prose-sm max-w-none text-foreground
+                    prose-p:my-2 prose-p:leading-relaxed
+                    prose-strong:text-foreground
+                    prose-a:text-primary prose-a:no-underline hover:prose-a:underline"
+                  dangerouslySetInnerHTML={{ __html: announcementDetail.content }}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // 공지사항 목록 모달
+  if (showAnnouncementsList) {
+    return (
+      <div className="fixed inset-0 bg-background flex flex-col z-50">
+        <header className="flex-shrink-0 px-4 py-3 flex items-center gap-3 border-b border-border/50">
+          <button
+            onClick={() => setShowAnnouncementsList(false)}
+            className="w-10 h-10 rounded-full bg-card flex items-center justify-center hover:bg-muted transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5 text-foreground" />
+          </button>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-lg font-semibold text-foreground">공지사항</h1>
+            <p className="text-xs text-muted-foreground truncate">
+              {selectedCourseId ? getCourseName(selectedCourseId) : ''}
+            </p>
+          </div>
+        </header>
+
+        <div className="flex-1 overflow-y-auto">
+          {loadingAnnouncements ? (
+            <div className="flex items-center justify-center h-full">
+              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            </div>
+          ) : announcements.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-full p-6">
+              <Bell className="w-12 h-12 text-muted-foreground mb-4" />
+              <p className="text-muted-foreground">공지사항이 없습니다.</p>
+            </div>
+          ) : (
+            <div className="p-4 space-y-2">
+              {announcements.map((ann) => (
+                <button
+                  key={ann.id}
+                  onClick={() => handleViewAnnouncementDetail(ann.id)}
+                  className="w-full bg-card rounded-xl p-4 border border-border/50 text-left hover:bg-muted/50 transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium text-foreground text-sm line-clamp-2">
+                        {ann.title}
+                      </h3>
+                      <div className="flex items-center gap-2 mt-1.5 text-xs text-muted-foreground">
+                        <span>{ann.user_name}</span>
+                        <span>·</span>
+                        <span>{formatPostedDate(ann.posted_at)}</span>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-1" />
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    )
+  }
 
   // 로그인 모달
   if (showLoginModal) {
@@ -358,9 +621,13 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
                     {hasContent ? (
                       <div className="flex flex-wrap gap-2">
                         {act.total_unread_announcements > 0 && (
-                          <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs">
+                          <button
+                            onClick={() => handleViewAnnouncements(course.course_id)}
+                            className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs hover:bg-blue-200 transition-colors flex items-center gap-1"
+                          >
+                            <Bell className="w-3 h-3" />
                             공지 {act.total_unread_announcements}
-                          </span>
+                          </button>
                         )}
                         {act.total_incompleted_movies > 0 && (
                           <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 text-xs">

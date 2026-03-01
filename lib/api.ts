@@ -429,4 +429,14 @@ export const canvasAPI = {
   getCourses: async () => {
     return fetchAPI('/canvas/courses')
   },
+
+  // 과목별 공지사항 목록 조회
+  getCourseAnnouncements: async (courseId: number) => {
+    return fetchAPI(`/canvas/courses/${courseId}/announcements`)
+  },
+
+  // 공지사항 상세 조회
+  getAnnouncement: async (courseId: number, topicId: number) => {
+    return fetchAPI(`/canvas/announcements/${courseId}/${topicId}`)
+  },
 }

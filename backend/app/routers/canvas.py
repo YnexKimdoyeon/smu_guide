@@ -389,3 +389,163 @@ async def get_canvas_courses(
     return response.json()
 
 
+async def _fetch_announcement(session_data: dict, course_id: int, topic_id: int):
+    """공지사항 상세 조회 내부 함수"""
+    from bs4 import BeautifulSoup
+
+    cookies = session_data.get('cookies', {})
+
+    async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+        }
+
+        # 공지사항 페이지 HTML 가져오기
+        response = await client.get(
+            f"https://canvas.sunmoon.ac.kr/courses/{course_id}/discussion_topics/{topic_id}",
+            headers=headers,
+            cookies=cookies
+        )
+
+        return response
+
+
+async def _fetch_announcements_list(session_data: dict, course_id: int):
+    """과목별 공지사항 목록 조회 내부 함수"""
+    cookies = session_data.get('cookies', {})
+
+    async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'application/json'
+        }
+
+        # Canvas API로 공지사항 목록 가져오기
+        response = await client.get(
+            f"https://canvas.sunmoon.ac.kr/api/v1/courses/{course_id}/discussion_topics",
+            params={"only_announcements": "true", "per_page": "20"},
+            headers=headers,
+            cookies=cookies
+        )
+
+        return response
+
+
+def parse_announcement_html(html: str) -> dict:
+    """공지사항 HTML에서 내용 파싱"""
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(html, 'html.parser')
+
+    result = {
+        'title': '',
+        'author': '',
+        'course_name': '',
+        'content': '',
+        'posted_at': ''
+    }
+
+    # 제목 추출
+    title_el = soup.find('h1', class_='discussion-title')
+    if title_el:
+        result['title'] = title_el.get_text(strip=True)
+
+    # 작성자 추출
+    author_el = soup.find('a', class_='author')
+    if author_el:
+        result['author'] = author_el.get_text(strip=True)
+
+    # 과목명 추출 (breadcrumb에서)
+    breadcrumb = soup.find('nav', id='breadcrumbs')
+    if breadcrumb:
+        links = breadcrumb.find_all('a')
+        if len(links) >= 2:
+            result['course_name'] = links[1].get_text(strip=True)
+
+    # 내용 추출 - enhanced 클래스가 있는 message div 찾기
+    content_el = soup.find('div', class_='message user_content enhanced')
+    if content_el:
+        # HTML 태그 유지하면서 내용 추출
+        result['content'] = str(content_el)
+    else:
+        # fallback: 일반 message div
+        content_el = soup.find('div', class_='message user_content')
+        if content_el:
+            result['content'] = str(content_el)
+
+    return result
+
+
+@router.get("/courses/{course_id}/announcements")
+async def get_course_announcements(
+    course_id: int,
+    current_user: User = Depends(get_current_user)
+):
+    """과목별 공지사항 목록 조회"""
+    user_id = current_user.id
+
+    if user_id not in canvas_session_cache:
+        raise HTTPException(status_code=401, detail="Canvas 세션이 필요합니다.")
+
+    session_data = canvas_session_cache[user_id]
+
+    # 첫 번째 시도
+    response = await _fetch_announcements_list(session_data, course_id)
+
+    # 실패 시 세션 갱신 후 재시도
+    if response.status_code != 200:
+        print(f"[Canvas] announcements list API 실패, 세션 갱신 시도: status={response.status_code}")
+        try:
+            session_data = await refresh_canvas_session(user_id)
+            response = await _fetch_announcements_list(session_data, course_id)
+        except Exception as e:
+            print(f"[Canvas] 세션 갱신 실패: {e}")
+            if user_id in canvas_session_cache:
+                del canvas_session_cache[user_id]
+            raise HTTPException(status_code=401, detail="Canvas 세션이 만료되었습니다.")
+
+    if response.status_code != 200:
+        raise HTTPException(status_code=401, detail="Canvas 세션이 만료되었습니다.")
+
+    return response.json()
+
+
+@router.get("/announcements/{course_id}/{topic_id}")
+async def get_canvas_announcement(
+    course_id: int,
+    topic_id: int,
+    current_user: User = Depends(get_current_user)
+):
+    """Canvas 공지사항 상세 조회"""
+    user_id = current_user.id
+
+    if user_id not in canvas_session_cache:
+        raise HTTPException(status_code=401, detail="Canvas 세션이 필요합니다.")
+
+    session_data = canvas_session_cache[user_id]
+
+    # 첫 번째 시도
+    response = await _fetch_announcement(session_data, course_id, topic_id)
+
+    # 실패 시 세션 갱신 후 재시도
+    if response.status_code != 200:
+        print(f"[Canvas] announcement API 실패, 세션 갱신 시도: status={response.status_code}")
+        try:
+            session_data = await refresh_canvas_session(user_id)
+            response = await _fetch_announcement(session_data, course_id, topic_id)
+        except Exception as e:
+            print(f"[Canvas] 세션 갱신 실패: {e}")
+            if user_id in canvas_session_cache:
+                del canvas_session_cache[user_id]
+            raise HTTPException(status_code=401, detail="Canvas 세션이 만료되었습니다.")
+
+    if response.status_code != 200:
+        raise HTTPException(status_code=401, detail="Canvas 세션이 만료되었습니다.")
+
+    # HTML 파싱
+    announcement = parse_announcement_html(response.text)
+
+    return announcement
+
+
