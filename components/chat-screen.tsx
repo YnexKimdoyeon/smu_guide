@@ -381,6 +381,23 @@ export function ChatScreen({ onBack }: ChatScreenProps) {
     return date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })
   }
 
+  const formatDate = (dateStr: string) => {
+    const date = new Date(dateStr)
+    return date.toLocaleDateString('ko-KR', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' })
+  }
+
+  const getDateKey = (dateStr: string) => {
+    const date = new Date(dateStr)
+    return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
+  }
+
+  const shouldShowDateSeparator = (messages: ChatMessage[], currentIndex: number) => {
+    if (currentIndex === 0) return true
+    const currentDateKey = getDateKey(messages[currentIndex].created_at)
+    const prevDateKey = getDateKey(messages[currentIndex - 1].created_at)
+    return currentDateKey !== prevDateKey
+  }
+
   const globalRooms = rooms.filter(r => r.room_type === 'global')
   const subjectRooms = rooms.filter(r => r.room_type === 'subject')
 
@@ -464,29 +481,37 @@ export function ChatScreen({ onBack }: ChatScreenProps) {
                 <p className="text-sm text-muted-foreground">첫 메시지를 보내보세요!</p>
               </div>
             ) : (
-              randomMessages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={`flex flex-col max-w-[80%] ${msg.is_mine ? 'self-end items-end' : 'self-start items-start'}`}
-                >
-                  {!msg.is_mine && (
-                    <button
-                      onClick={() => msg.user_id && handleUserClick(msg.user_id, msg.sender, msg.id, 'random')}
-                      className="text-[10px] text-muted-foreground mb-1 ml-1 hover:text-primary hover:underline transition-colors"
-                    >
-                      {msg.sender}
-                    </button>
+              randomMessages.map((msg, index) => (
+                <div key={msg.id} className="flex flex-col">
+                  {shouldShowDateSeparator(randomMessages, index) && (
+                    <div className="flex items-center gap-3 my-4">
+                      <div className="flex-1 h-px bg-border" />
+                      <span className="text-xs text-muted-foreground px-2">{formatDate(msg.created_at)}</span>
+                      <div className="flex-1 h-px bg-border" />
+                    </div>
                   )}
                   <div
-                    className={`px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed ${
-                      msg.is_mine
-                        ? 'bg-primary text-primary-foreground rounded-tr-md'
-                        : 'bg-card border border-border/50 text-foreground rounded-tl-md'
-                    }`}
+                    className={`flex flex-col max-w-[80%] ${msg.is_mine ? 'self-end items-end' : 'self-start items-start'}`}
                   >
-                    {msg.message}
+                    {!msg.is_mine && (
+                      <button
+                        onClick={() => msg.user_id && handleUserClick(msg.user_id, msg.sender, msg.id, 'random')}
+                        className="text-[10px] text-muted-foreground mb-1 ml-1 hover:text-primary hover:underline transition-colors"
+                      >
+                        {msg.sender}
+                      </button>
+                    )}
+                    <div
+                      className={`px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                        msg.is_mine
+                          ? 'bg-primary text-primary-foreground rounded-tr-md'
+                          : 'bg-card border border-border/50 text-foreground rounded-tl-md'
+                      }`}
+                    >
+                      {msg.message}
+                    </div>
+                    <span className="text-[10px] text-muted-foreground mt-1 mx-1">{formatTime(msg.created_at)}</span>
                   </div>
-                  <span className="text-[10px] text-muted-foreground mt-1 mx-1">{formatTime(msg.created_at)}</span>
                 </div>
               ))
             )}
@@ -740,29 +765,37 @@ export function ChatScreen({ onBack }: ChatScreenProps) {
                 <p className="text-sm text-muted-foreground">첫 메시지를 보내보세요!</p>
               </div>
             ) : (
-              messages.map((msg) => (
-                <div
-                  key={msg.id}
-                  className={`flex flex-col max-w-[80%] ${msg.is_mine ? 'self-end items-end' : 'self-start items-start'}`}
-                >
-                  {!msg.is_mine && (
-                    <button
-                      onClick={() => msg.user_id && handleUserClick(msg.user_id, msg.sender, msg.id, 'chat')}
-                      className="text-[10px] text-muted-foreground mb-1 ml-1 hover:text-primary hover:underline transition-colors"
-                    >
-                      {msg.sender}
-                    </button>
+              messages.map((msg, index) => (
+                <div key={msg.id} className="flex flex-col">
+                  {shouldShowDateSeparator(messages, index) && (
+                    <div className="flex items-center gap-3 my-4">
+                      <div className="flex-1 h-px bg-border" />
+                      <span className="text-xs text-muted-foreground px-2">{formatDate(msg.created_at)}</span>
+                      <div className="flex-1 h-px bg-border" />
+                    </div>
                   )}
                   <div
-                    className={`px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed ${
-                      msg.is_mine
-                        ? 'bg-primary text-primary-foreground rounded-tr-md'
-                        : 'bg-card border border-border/50 text-foreground rounded-tl-md'
-                    }`}
+                    className={`flex flex-col max-w-[80%] ${msg.is_mine ? 'self-end items-end' : 'self-start items-start'}`}
                   >
-                    {msg.message}
+                    {!msg.is_mine && (
+                      <button
+                        onClick={() => msg.user_id && handleUserClick(msg.user_id, msg.sender, msg.id, 'chat')}
+                        className="text-[10px] text-muted-foreground mb-1 ml-1 hover:text-primary hover:underline transition-colors"
+                      >
+                        {msg.sender}
+                      </button>
+                    )}
+                    <div
+                      className={`px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                        msg.is_mine
+                          ? 'bg-primary text-primary-foreground rounded-tr-md'
+                          : 'bg-card border border-border/50 text-foreground rounded-tl-md'
+                      }`}
+                    >
+                      {msg.message}
+                    </div>
+                    <span className="text-[10px] text-muted-foreground mt-1 mx-1">{formatTime(msg.created_at)}</span>
                   </div>
-                  <span className="text-[10px] text-muted-foreground mt-1 mx-1">{formatTime(msg.created_at)}</span>
                 </div>
               ))
             )}
