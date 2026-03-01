@@ -57,19 +57,6 @@ def parse_mileage_html(html: str) -> MileageData:
 
     data = MileageData()
 
-    # tbody에서 tr 찾기
-    tbody = soup.find('tbody', id='tbMileageList')
-    if not tbody:
-        return data
-
-    tr = tbody.find('tr')
-    if not tr:
-        return data
-
-    tds = tr.find_all('td')
-    if len(tds) < 19:
-        return data
-
     def get_value(td) -> int:
         text = td.get_text(strip=True)
         try:
@@ -77,6 +64,31 @@ def parse_mileage_html(html: str) -> MileageData:
         except:
             return 0
 
+    # 방법 1: tbody id='tbMileageList'에서 찾기
+    tbody = soup.find('tbody', id='tbMileageList')
+    if tbody:
+        tr = tbody.find('tr')
+        if tr:
+            tds = tr.find_all('td')
+            if len(tds) >= 19:
+                return parse_tds(tds, data, get_value)
+
+    # 방법 2: class='a_C'인 td들 직접 찾기
+    tds = soup.find_all('td', class_='a_C')
+    if len(tds) >= 19:
+        return parse_tds(tds, data, get_value)
+
+    # 방법 3: 모든 tr에서 td 19개 이상 있는 행 찾기
+    for tr in soup.find_all('tr'):
+        tds = tr.find_all('td')
+        if len(tds) >= 19:
+            return parse_tds(tds, data, get_value)
+
+    return data
+
+
+def parse_tds(tds, data: MileageData, get_value) -> MileageData:
+    """td 리스트에서 마일리지 데이터 추출"""
     # S 영역 (5개)
     data.s_subject = get_value(tds[0])
     data.s_self_diagnosis = get_value(tds[1])
