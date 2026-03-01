@@ -53,18 +53,19 @@ def parse_menu_html(html: str) -> dict:
     if date_span:
         result["date_range"] = date_span.get_text(strip=True)
 
-    # 헤더에서 카테고리 추출 (일자, 한식, 즉석, 양식&분식 등)
-    header_row = table.find('tr')
-    if header_row:
-        headers = header_row.find_all('th')
-        # 두 번째 행에서 카테고리 찾기
-        all_rows = table.find_all('tr')
-        for row in all_rows:
-            ths = row.find_all('th')
-            if len(ths) > 1:  # 카테고리 행
-                for th in ths[1:]:  # 첫 번째(일자) 제외
+    # 헤더에서 카테고리 추출
+    # thead 안의 모든 행 확인
+    all_rows = table.find_all('tr')
+    for row in all_rows:
+        ths = row.find_all('th')
+        # 첫 번째 th가 "일자"인 행 찾기 (카테고리 헤더 행)
+        if len(ths) > 1:
+            first_th_text = ths[0].get_text(strip=True)
+            if first_th_text == '일자':
+                # 나머지 th들이 카테고리 (아침/점심/저녁 또는 한식/즉석/양식 등)
+                for th in ths[1:]:
                     cat_text = th.get_text(strip=True)
-                    if cat_text and cat_text != '일자':
+                    if cat_text:
                         result["menu_categories"].append(cat_text)
                 break
 
