@@ -592,6 +592,13 @@ export const meetingAPI = {
       method: 'DELETE',
     })
   },
+
+  // 매칭된 채팅방 나가기
+  leaveMeeting: async (meetingId: number) => {
+    return fetchAPI(`/meetings/${meetingId}/leave`, {
+      method: 'POST',
+    })
+  },
 }
 
 // 알림 API

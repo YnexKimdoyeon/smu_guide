@@ -10,7 +10,7 @@ from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
 from app.models.meeting import Meeting, MeetingApplication
-from app.models.chat import ChatRoom, ChatRoomMember
+from app.models.chat import ChatRoom, ChatRoomMember, ChatMessage
 
 router = APIRouter(prefix="/meetings", tags=["과팅"])
 
@@ -349,6 +349,55 @@ async def match_meeting(
         "message": "매칭이 완료되었습니다.",
         "chat_room_id": chat_room.id
     }
+
+
+@router.post("/{meeting_id}/leave")
+async def leave_meeting_chat(
+    meeting_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """매칭된 과팅 채팅방 나가기 (한 명이 나가면 둘 다 매칭 해제)"""
+    meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+    if not meeting:
+        raise HTTPException(status_code=404, detail="과팅을 찾을 수 없습니다.")
+
+    if meeting.status != "matched":
+        raise HTTPException(status_code=400, detail="매칭된 과팅이 아닙니다.")
+
+    # 매칭된 신청 찾기
+    matched_app = db.query(MeetingApplication).filter(
+        MeetingApplication.id == meeting.matched_application_id
+    ).first()
+
+    # 현재 유저가 과팅 작성자거나 매칭된 신청자인지 확인
+    if meeting.user_id != current_user.id and (not matched_app or matched_app.user_id != current_user.id):
+        raise HTTPException(status_code=403, detail="권한이 없습니다.")
+
+    # 채팅방 삭제
+    if meeting.chat_room_id:
+        # 채팅방 멤버 삭제
+        db.query(ChatRoomMember).filter(
+            ChatRoomMember.room_id == meeting.chat_room_id
+        ).delete()
+        # 채팅 메시지 삭제
+        db.query(ChatMessage).filter(
+            ChatMessage.room_id == meeting.chat_room_id
+        ).delete()
+        # 채팅방 삭제
+        db.query(ChatRoom).filter(
+            ChatRoom.id == meeting.chat_room_id
+        ).delete()
+
+    # 매칭 해제
+    if matched_app:
+        matched_app.is_matched = 0
+    meeting.status = "closed"
+    meeting.matched_application_id = None
+    meeting.chat_room_id = None
+
+    db.commit()
+    return {"message": "채팅방을 나갔습니다. 매칭이 해제되었습니다."}
 
 
 @router.delete("/{meeting_id}/applications/{application_id}")

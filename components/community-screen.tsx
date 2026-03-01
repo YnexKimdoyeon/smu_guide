@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { ArrowLeft, Plus, Users, Heart, Edit2, Trash2, ChevronRight, UserPlus, Check, X, MessageCircle, Send } from 'lucide-react'
+import { ArrowLeft, Plus, Users, Heart, Edit2, Trash2, ChevronRight, UserPlus, Check, X, MessageCircle, Send, LogOut } from 'lucide-react'
 import { clubAPI, meetingAPI, chatAPI } from '@/lib/api'
 
 interface CommunityScreenProps {
@@ -57,6 +57,7 @@ interface Meeting {
   created_at: string
   application_count: number
   is_mine: boolean
+  is_applicant?: boolean
   has_applied?: boolean
   my_application_id?: number
 }
@@ -87,10 +88,12 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
 
   // 채팅 상태
   const [chatRoomId, setChatRoomId] = useState<number | null>(null)
+  const [chatMeetingId, setChatMeetingId] = useState<number | null>(null)
   const [chatRoomName, setChatRoomName] = useState('')
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [chatInput, setChatInput] = useState('')
   const [isSending, setIsSending] = useState(false)
+  const [isLeaving, setIsLeaving] = useState(false)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const chatPollingRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -372,13 +375,37 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
   }
 
   // 채팅 관련 함수
-  const openChatRoom = async (roomId: number, roomName: string) => {
+  const openChatRoom = async (roomId: number, roomName: string, meetingId: number) => {
     setChatRoomId(roomId)
+    setChatMeetingId(meetingId)
     setChatRoomName(roomName)
     setChatMessages([])
     setView('chat')
     await loadChatMessages(roomId)
     startChatPolling(roomId)
+  }
+
+  // 채팅방 나가기
+  const handleLeaveMeeting = async () => {
+    if (!chatMeetingId || isLeaving) return
+    if (!confirm('채팅방을 나가면 매칭이 해제됩니다. 정말 나가시겠습니까?')) return
+
+    setIsLeaving(true)
+    try {
+      await meetingAPI.leaveMeeting(chatMeetingId)
+      alert('채팅방을 나갔습니다.')
+      // 채팅 폴링 중지
+      if (chatPollingRef.current) {
+        clearInterval(chatPollingRef.current)
+        chatPollingRef.current = null
+      }
+      setView('list')
+      loadData()
+    } catch (err: any) {
+      alert(err.message || '나가기에 실패했습니다.')
+    } finally {
+      setIsLeaving(false)
+    }
   }
 
   const loadChatMessages = async (roomId: number) => {
@@ -456,7 +483,7 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
         >
           <ArrowLeft className="w-5 h-5 text-foreground" />
         </button>
-        <h1 className="text-lg font-semibold text-foreground">
+        <h1 className="flex-1 text-lg font-semibold text-foreground">
           {view === 'list' && '커뮤니티'}
           {view === 'detail' && (activeTab === 'club' ? selectedClub?.name : `${selectedMeeting?.department} 과팅`)}
           {view === 'write' && (activeTab === 'club' ? '동아리 등록' : '과팅 등록')}
@@ -465,6 +492,15 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
           {view === 'applications' && '신청 목록'}
           {view === 'chat' && chatRoomName}
         </h1>
+        {view === 'chat' && (
+          <button
+            onClick={handleLeaveMeeting}
+            disabled={isLeaving}
+            className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center hover:bg-red-200 transition-colors"
+          >
+            <LogOut className="w-5 h-5 text-red-500" />
+          </button>
+        )}
       </header>
 
       {/* 탭 (리스트 뷰에서만) */}
@@ -621,7 +657,7 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
                         {meeting.status === 'matched' && meeting.chat_room_id && (
                           <div className="mt-3 pt-3 border-t border-border/50">
                             <button
-                              onClick={() => openChatRoom(meeting.chat_room_id!, `${meeting.department} 과팅`)}
+                              onClick={() => openChatRoom(meeting.chat_room_id!, `${meeting.department} 과팅`, meeting.id)}
                               className="w-full py-2.5 text-sm font-medium text-white bg-green-500 rounded-lg flex items-center justify-center gap-2"
                             >
                               <MessageCircle className="w-4 h-4" />

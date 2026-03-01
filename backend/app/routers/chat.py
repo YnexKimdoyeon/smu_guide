@@ -259,10 +259,10 @@ def get_chat_messages(
     blocked_user_ids = [b[0] for b in blocked_ids]
 
     # 차단된 사용자의 메시지 제외
-    messages = db.query(ChatMessage).filter(
-        ChatMessage.room_id == room_id,
-        ~ChatMessage.user_id.in_(blocked_user_ids) if blocked_user_ids else True
-    ).order_by(ChatMessage.created_at).all()
+    query = db.query(ChatMessage).filter(ChatMessage.room_id == room_id)
+    if blocked_user_ids:
+        query = query.filter(~ChatMessage.user_id.in_(blocked_user_ids))
+    messages = query.order_by(ChatMessage.created_at).all()
 
     result = []
     for msg in messages:
