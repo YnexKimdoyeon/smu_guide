@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Search, UserPlus, Check, X, Clock, Calendar, User, Send } from 'lucide-react'
+import { Search, UserPlus, Check, X, Clock, Calendar, User, Send, Trash2 } from 'lucide-react'
 import { AppShell } from './app-shell'
 import { friendAPI } from '@/lib/api'
 
@@ -105,6 +105,18 @@ export function FriendsScreen({ onBack }: FriendsScreenProps) {
       setShowFreeTime(true)
     } catch (error) {
       console.error('공강 비교 실패:', error)
+    }
+  }
+
+  const handleDeleteFriend = async (id: number) => {
+    if (!confirm('정말로 이 친구를 삭제하시겠습니까?')) return
+
+    try {
+      await friendAPI.deleteFriend(id)
+      setFriends(friends.filter(f => f.id !== id))
+      setSelectedFriends(selectedFriends.filter(fId => fId !== id))
+    } catch (error) {
+      console.error('친구 삭제 실패:', error)
     }
   }
 
@@ -259,33 +271,44 @@ export function FriendsScreen({ onBack }: FriendsScreenProps) {
                 filteredFriends.map((friend) => {
                   const isSelected = selectedFriends.includes(friend.id)
                   return (
-                    <button
+                    <div
                       key={friend.id}
-                      onClick={() => toggleFriend(friend.id)}
-                      className={`w-full text-left p-3.5 rounded-xl border shadow-sm transition-all flex items-center gap-3 ${
+                      className={`w-full p-3.5 rounded-xl border shadow-sm transition-all flex items-center gap-3 ${
                         isSelected
                           ? 'bg-primary/5 border-primary/30'
                           : 'bg-card border-border/50 hover:shadow-md'
                       }`}
                     >
-                      <div
-                        className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors ${
-                          isSelected ? 'bg-primary border-primary' : 'border-border'
-                        }`}
+                      <button
+                        onClick={() => toggleFriend(friend.id)}
+                        className="flex items-center gap-3 flex-1 min-w-0"
                       >
-                        {isSelected && <Check className="w-3 h-3 text-primary-foreground" />}
-                      </div>
+                        <div
+                          className={`w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors ${
+                            isSelected ? 'bg-primary border-primary' : 'border-border'
+                          }`}
+                        >
+                          {isSelected && <Check className="w-3 h-3 text-primary-foreground" />}
+                        </div>
 
-                      <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                        <User className="w-4 h-4 text-primary" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground">{friend.friend_name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {friend.friend_student_id} | {friend.friend_department}
-                        </p>
-                      </div>
-                    </button>
+                        <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                          <User className="w-4 h-4 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0 text-left">
+                          <p className="text-sm font-medium text-foreground">{friend.friend_name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {friend.friend_student_id} | {friend.friend_department}
+                          </p>
+                        </div>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteFriend(friend.id)}
+                        className="w-8 h-8 rounded-full bg-destructive/10 flex items-center justify-center hover:bg-destructive/20 transition-colors shrink-0"
+                        aria-label="친구 삭제"
+                      >
+                        <Trash2 className="w-4 h-4 text-destructive" />
+                      </button>
+                    </div>
                   )
                 })
               )}

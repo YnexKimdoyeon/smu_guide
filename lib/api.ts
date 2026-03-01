@@ -296,6 +296,13 @@ export const friendAPI = {
   searchUsers: async (query: string) => {
     return fetchAPI(`/friends/search?q=${encodeURIComponent(query)}`)
   },
+
+  // 친구 삭제
+  deleteFriend: async (friendId: number) => {
+    return fetchAPI(`/friends/${friendId}`, {
+      method: 'DELETE',
+    })
+  },
 }
 
 // 랜덤 채팅 API
