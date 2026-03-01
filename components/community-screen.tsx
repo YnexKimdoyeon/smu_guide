@@ -400,6 +400,7 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
         chatPollingRef.current = null
       }
       setView('list')
+      setShowMyMeetings(true)  // 내 과팅 탭 유지
       loadData()
     } catch (err: any) {
       alert(err.message || '나가기에 실패했습니다.')
