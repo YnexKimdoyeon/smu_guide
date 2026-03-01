@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Calendar, MessageCircle, MapPin, Users, LogOut, User, UserX, GraduationCap, Building2, Heart, Award } from 'lucide-react'
 import type { User as UserType } from '@/lib/store'
-import { authAPI } from '@/lib/api'
+import { authAPI, notificationAPI } from '@/lib/api'
 import { Chatbot } from './chatbot'
 
 export type AppId = 'timetable' | 'chat' | 'commute' | 'announcements' | 'phonebook' | 'friends' | 'elearning' | 'academic-calendar' | 'sunmoon-info' | 'cafeteria' | 'community' | 'scholarship'
@@ -28,6 +28,38 @@ const apps: { id: AppId; label: string; icon: typeof Calendar; color: string; bg
 export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
   const [showWithdrawModal, setShowWithdrawModal] = useState(false)
   const [isWithdrawing, setIsWithdrawing] = useState(false)
+  const [badges, setBadges] = useState<Record<string, number>>({})
+
+  // 알림 배지 조회
+  useEffect(() => {
+    const fetchBadges = async () => {
+      try {
+        const data = await notificationAPI.getBadges()
+        setBadges(data)
+      } catch {
+        // 무시
+      }
+    }
+    fetchBadges()
+    // 30초마다 배지 갱신
+    const interval = setInterval(fetchBadges, 30000)
+    return () => clearInterval(interval)
+  }, [])
+
+  const handleOpenApp = async (appId: AppId) => {
+    // 앱 열 때 조회 기록 저장
+    try {
+      await notificationAPI.markViewed(appId)
+      setBadges(prev => {
+        const newBadges = { ...prev }
+        delete newBadges[appId]
+        return newBadges
+      })
+    } catch {
+      // 무시
+    }
+    onOpenApp(appId)
+  }
 
   const handleWithdraw = async () => {
     if (isWithdrawing) return
@@ -80,17 +112,23 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
           <div className="grid grid-cols-3 gap-4">
             {apps.map((app) => {
               const Icon = app.icon
+              const badgeCount = badges[app.id]
               return (
                 <button
                   key={app.id}
-                  onClick={() => onOpenApp(app.id)}
-                  className="flex flex-col items-center gap-2.5 p-4 rounded-2xl bg-card shadow-sm border border-border/50 hover:shadow-md hover:scale-[1.02] active:scale-[0.97] transition-all"
+                  onClick={() => handleOpenApp(app.id)}
+                  className="flex flex-col items-center gap-2.5 p-4 rounded-2xl bg-card shadow-sm border border-border/50 hover:shadow-md hover:scale-[1.02] active:scale-[0.97] transition-all relative"
                 >
                   <div
-                    className="w-14 h-14 rounded-2xl flex items-center justify-center"
+                    className="w-14 h-14 rounded-2xl flex items-center justify-center relative"
                     style={{ backgroundColor: app.bgColor }}
                   >
                     <Icon className="w-7 h-7" style={{ color: app.color }} />
+                    {badgeCount && badgeCount > 0 && (
+                      <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 flex items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full">
+                        {badgeCount > 99 ? '99+' : badgeCount}
+                      </span>
+                    )}
                   </div>
                   <span className="text-xs font-medium text-foreground text-center leading-tight">
                     {app.label}

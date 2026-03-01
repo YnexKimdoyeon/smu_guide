@@ -593,3 +593,18 @@ export const meetingAPI = {
     })
   },
 }
+
+// 알림 API
+export const notificationAPI = {
+  // 알림 배지 조회
+  getBadges: async () => {
+    return fetchAPI('/notifications/badges')
+  },
+
+  // 앱 조회 기록
+  markViewed: async (appId: string) => {
+    return fetchAPI(`/notifications/viewed/${appId}`, {
+      method: 'POST',
+    })
+  },
+}

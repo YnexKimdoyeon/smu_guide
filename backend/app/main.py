@@ -10,7 +10,7 @@ import random
 
 from app.core.database import engine, Base, SessionLocal
 from app.core.config import settings
-from app.routers import auth, schedule, chat, commute, announcement, phonebook, friend, sunmoon, random_chat, ws_chat, block, gpt, canvas, cafeteria, club, meeting, scholarship
+from app.routers import auth, schedule, chat, commute, announcement, phonebook, friend, sunmoon, random_chat, ws_chat, block, gpt, canvas, cafeteria, club, meeting, scholarship, notification
 from app.models.commute import CommuteSchedule, CommuteGroup, CommuteGroupMember
 from app.models.user import User
 from app.services.crawler import sync_run_crawler
@@ -20,6 +20,7 @@ from app.models import user, schedule as schedule_model, chat as chat_model
 from app.models import commute as commute_model, announcement as announcement_model
 from app.models import phonebook as phonebook_model, friend as friend_model
 from app.models import block as block_model, club as club_model, meeting as meeting_model
+from app.models import notification as notification_model
 
 # 데이터베이스 테이블 생성
 Base.metadata.create_all(bind=engine)
@@ -517,6 +518,7 @@ app.include_router(cafeteria.router, prefix="/api")
 app.include_router(club.router, prefix="/api")
 app.include_router(meeting.router, prefix="/api")
 app.include_router(scholarship.router, prefix="/api")
+app.include_router(notification.router, prefix="/api")
 app.include_router(ws_chat.router)
 
 
