@@ -66,7 +66,7 @@ export function ScholarshipScreen({ onBack }: ScholarshipScreenProps) {
 
   const calculateScholarship = (total: number) => {
     if (total < 100) return 0
-    return Math.floor((total - 100) / 10 + 1) * 10000
+    return Math.floor(total / 10) * 10000
   }
 
   return (
@@ -119,6 +119,7 @@ export function ScholarshipScreen({ onBack }: ScholarshipScreenProps) {
             <div className="text-xs text-amber-700 space-y-1">
               <p>100점 이상부터 10점당 1만원으로 환산되어 장학금이 입금됩니다.</p>
               <p>4학년은 장학금 지급이 되지 않습니다.</p>
+              <p>높은 점수의 장학생 순서대로 장학금이 지급됩니다. 점수가 낮을 경우 예산상의 이유로 장학금 지급이 되지 않을 수도 있습니다.</p>
             </div>
           </div>
         </div>
@@ -274,15 +275,6 @@ export function ScholarshipScreen({ onBack }: ScholarshipScreenProps) {
               </div>
             </div>
 
-            {/* STAR 설명 */}
-            <div className="bg-muted/50 rounded-xl p-4">
-              <p className="text-xs text-muted-foreground text-center">
-                <span className="text-blue-500 font-bold">S</span>elf-development ·
-                <span className="text-green-500 font-bold">T</span>alent ·
-                <span className="text-purple-500 font-bold">A</span>ctivity ·
-                <span className="text-red-500 font-bold">R</span>elationship
-              </p>
-            </div>
           </div>
         ) : null}
       </div>
