@@ -23,10 +23,35 @@ CAFETERIA_NAMES = {
 }
 
 
+def preprocess_html(html: str) -> str:
+    """HTML 전처리 - 비정상적인 태그 수정"""
+    # </br>를 <br>로 변환
+    html = re.sub(r'</br>', '<br>', html, flags=re.IGNORECASE)
+    # <br>를 표준 형식으로
+    html = re.sub(r'<br\s*/?>', '<br/>', html, flags=re.IGNORECASE)
+
+    # 잘못된 행 닫힘 수정: </td> 또는 </th> 뒤에 오는 <tr>을 </tr>로 변환
+    # 패턴: </td>    <tr> -> </td></tr>
+    html = re.sub(r'(</td>)\s*<tr>\s*(?=<tr|</thead|</tbody|</table|\Z)', r'\1</tr>', html, flags=re.IGNORECASE)
+    html = re.sub(r'(</th>)\s*<tr>\s*(?=<tr|</thead|</tbody|</table|\Z)', r'\1</tr>', html, flags=re.IGNORECASE)
+
+    # 반복 적용 (중첩된 경우)
+    for _ in range(3):
+        html = re.sub(r'(</td>)\s*<tr>\s*(?=<tr|</thead|</tbody|</table|\Z)', r'\1</tr>', html, flags=re.IGNORECASE)
+
+    # 단독 빈 <tr> 제거
+    html = re.sub(r'<tr>\s*</tr>', '', html, flags=re.IGNORECASE)
+    html = re.sub(r'<tr>\s*(?=</tbody>|</thead>|</table>)', '', html, flags=re.IGNORECASE)
+
+    return html
+
+
 def extract_menu_items(cell) -> List[str]:
     """셀에서 메뉴 항목 추출 (br 태그로 구분)"""
     # br 태그를 특수 구분자로 치환
     cell_html = str(cell)
+    # </br> 및 다양한 br 형식 처리
+    cell_html = re.sub(r'</br>', '|||', cell_html, flags=re.IGNORECASE)
     cell_html = re.sub(r'<br\s*/?>', '|||', cell_html, flags=re.IGNORECASE)
 
     # 다시 파싱해서 텍스트만 추출
@@ -40,6 +65,8 @@ def extract_menu_items(cell) -> List[str]:
 
 def parse_menu_html(html: str) -> dict:
     """식단 HTML 파싱"""
+    # HTML 전처리 (비정상 태그 수정)
+    html = preprocess_html(html)
     soup = BeautifulSoup(html, 'html.parser')
 
     result = {
