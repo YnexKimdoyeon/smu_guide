@@ -511,6 +511,14 @@ export const clubAPI = {
   },
 }
 
+// 장학금 API
+export const scholarshipAPI = {
+  // 마일리지 조회
+  getMileage: async (year: number) => {
+    return fetchAPI(`/scholarship/mileage?year=${year}`)
+  },
+}
+
 // 과팅 API
 export const meetingAPI = {
   // 목록 조회

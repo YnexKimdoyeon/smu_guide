@@ -1,12 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import { Calendar, MessageCircle, MapPin, Users, LogOut, User, UserX, GraduationCap, Building2, Heart } from 'lucide-react'
+import { Calendar, MessageCircle, MapPin, Users, LogOut, User, UserX, GraduationCap, Building2, Heart, Award } from 'lucide-react'
 import type { User as UserType } from '@/lib/store'
 import { authAPI } from '@/lib/api'
 import { Chatbot } from './chatbot'
 
-export type AppId = 'timetable' | 'chat' | 'commute' | 'announcements' | 'phonebook' | 'friends' | 'elearning' | 'academic-calendar' | 'sunmoon-info' | 'cafeteria' | 'community'
+export type AppId = 'timetable' | 'chat' | 'commute' | 'announcements' | 'phonebook' | 'friends' | 'elearning' | 'academic-calendar' | 'sunmoon-info' | 'cafeteria' | 'community' | 'scholarship'
 
 interface DashboardProps {
   user: UserType
@@ -18,6 +18,7 @@ const apps: { id: AppId; label: string; icon: typeof Calendar; color: string; bg
   { id: 'timetable', label: '내 시간표', icon: Calendar, color: '#3B82F6', bgColor: '#DBEAFE' },
   { id: 'elearning', label: 'E-러닝', icon: GraduationCap, color: '#6366F1', bgColor: '#E0E7FF' },
   { id: 'sunmoon-info', label: '선문대 정보', icon: Building2, color: '#059669', bgColor: '#D1FAE5' },
+  { id: 'scholarship', label: '장학금', icon: Award, color: '#F59E0B', bgColor: '#FEF3C7' },
   { id: 'community', label: '동아리/과팅', icon: Heart, color: '#F43F5E', bgColor: '#FFE4E6' },
   { id: 'chat', label: '익명 채팅', icon: MessageCircle, color: '#0EA5E9', bgColor: '#E0F2FE' },
   { id: 'commute', label: '등하교 메이트', icon: MapPin, color: '#10B981', bgColor: '#D1FAE5' },

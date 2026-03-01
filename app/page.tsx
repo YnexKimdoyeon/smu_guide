@@ -14,6 +14,7 @@ import { CalendarScreen } from '@/components/calendar-screen'
 import { SunmoonInfoScreen } from '@/components/sunmoon-info-screen'
 import { CafeteriaScreen } from '@/components/cafeteria-screen'
 import { CommunityScreen } from '@/components/community-screen'
+import { ScholarshipScreen } from '@/components/scholarship-screen'
 import { authAPI, getToken, removeToken } from '@/lib/api'
 import type { User } from '@/lib/store'
 
@@ -152,6 +153,9 @@ export default function Home() {
           userName={user.name}
           userStudentId={user.studentId}
         />
+      )}
+      {currentScreen === 'scholarship' && (
+        <ScholarshipScreen onBack={handleBack} />
       )}
     </div>
   )
