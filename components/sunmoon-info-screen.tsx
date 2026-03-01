@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ArrowLeft, CalendarDays, Bell, Phone, Building2 } from 'lucide-react'
+import { ArrowLeft, CalendarDays, Bell, Phone, Building2, UtensilsCrossed } from 'lucide-react'
 
-type SubAppId = 'academic-calendar' | 'announcements' | 'phonebook'
+type SubAppId = 'academic-calendar' | 'announcements' | 'phonebook' | 'cafeteria'
 
 interface SunmoonInfoScreenProps {
   onBack: () => void
@@ -34,6 +34,14 @@ const subApps: { id: SubAppId; label: string; icon: typeof CalendarDays; color: 
     color: '#8B5CF6',
     bgColor: '#EDE9FE',
     description: '학교 연락처 검색'
+  },
+  {
+    id: 'cafeteria',
+    label: '식단 정보',
+    icon: UtensilsCrossed,
+    color: '#EF4444',
+    bgColor: '#FEE2E2',
+    description: '식당별 주간 식단 확인'
   },
 ]
 

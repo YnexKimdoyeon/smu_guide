@@ -440,3 +440,17 @@ export const canvasAPI = {
     return fetchAPI(`/canvas/announcements/${courseId}/${topicId}`)
   },
 }
+
+// 식단 API
+export const cafeteriaAPI = {
+  // 식당 목록 조회
+  getList: async () => {
+    return fetchAPI('/cafeteria/list')
+  },
+
+  // 식단 조회
+  getMenu: async (cafeteriaType: string, day?: string) => {
+    const query = day ? `?day=${day}` : ''
+    return fetchAPI(`/cafeteria/menu/${cafeteriaType}${query}`)
+  },
+}

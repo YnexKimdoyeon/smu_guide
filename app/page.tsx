@@ -12,13 +12,14 @@ import { FriendsScreen } from '@/components/friends-screen'
 import { ElearningScreen } from '@/components/elearning-screen'
 import { CalendarScreen } from '@/components/calendar-screen'
 import { SunmoonInfoScreen } from '@/components/sunmoon-info-screen'
+import { CafeteriaScreen } from '@/components/cafeteria-screen'
 import { authAPI, getToken, removeToken } from '@/lib/api'
 import type { User } from '@/lib/store'
 
 type Screen = 'login' | 'dashboard' | AppId
 
 // 선문대 정보 하위 앱들
-const sunmoonSubApps: Screen[] = ['academic-calendar', 'announcements', 'phonebook']
+const sunmoonSubApps: Screen[] = ['academic-calendar', 'announcements', 'phonebook', 'cafeteria']
 
 export default function Home() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('login')
@@ -139,6 +140,9 @@ export default function Home() {
             setCurrentScreen(subAppId)
           }}
         />
+      )}
+      {currentScreen === 'cafeteria' && (
+        <CafeteriaScreen onBack={handleBack} />
       )}
     </div>
   )

@@ -6,7 +6,7 @@ import type { User as UserType } from '@/lib/store'
 import { authAPI } from '@/lib/api'
 import { Chatbot } from './chatbot'
 
-export type AppId = 'timetable' | 'chat' | 'commute' | 'announcements' | 'phonebook' | 'friends' | 'elearning' | 'academic-calendar' | 'sunmoon-info'
+export type AppId = 'timetable' | 'chat' | 'commute' | 'announcements' | 'phonebook' | 'friends' | 'elearning' | 'academic-calendar' | 'sunmoon-info' | 'cafeteria'
 
 interface DashboardProps {
   user: UserType
