@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { ArrowLeft, Plus, Users, Heart, Edit2, Trash2, ChevronRight, UserPlus, Check, X, MessageCircle } from 'lucide-react'
-import { clubAPI, meetingAPI } from '@/lib/api'
+import { useState, useEffect, useRef } from 'react'
+import { ArrowLeft, Plus, Users, Heart, Edit2, Trash2, ChevronRight, UserPlus, Check, X, MessageCircle, Send } from 'lucide-react'
+import { clubAPI, meetingAPI, chatAPI } from '@/lib/api'
 
 interface CommunityScreenProps {
   onBack: () => void
@@ -12,7 +12,16 @@ interface CommunityScreenProps {
 }
 
 type Tab = 'club' | 'meeting'
-type View = 'list' | 'detail' | 'write' | 'edit' | 'apply' | 'applications'
+type View = 'list' | 'detail' | 'write' | 'edit' | 'apply' | 'applications' | 'chat'
+
+interface ChatMessage {
+  id: number
+  room_id: number
+  user_id: number
+  message: string
+  created_at: string
+  is_mine?: boolean
+}
 
 interface Club {
   id: number
@@ -75,6 +84,15 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
   const [clubApplications, setClubApplications] = useState<ClubApplication[]>([])
   const [meetingApplications, setMeetingApplications] = useState<MeetingApplication[]>([])
   const [isLoading, setIsLoading] = useState(true)
+
+  // 채팅 상태
+  const [chatRoomId, setChatRoomId] = useState<number | null>(null)
+  const [chatRoomName, setChatRoomName] = useState('')
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
+  const [chatInput, setChatInput] = useState('')
+  const [isSending, setIsSending] = useState(false)
+  const chatEndRef = useRef<HTMLDivElement>(null)
+  const chatPollingRef = useRef<NodeJS.Timeout | null>(null)
 
   // 폼 상태
   const [clubForm, setClubForm] = useState({ name: '', description: '', qna_questions: [''] })
@@ -336,7 +354,15 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
   }
 
   const goBack = () => {
-    if (view === 'list') {
+    if (view === 'chat') {
+      // 채팅 폴링 중지
+      if (chatPollingRef.current) {
+        clearInterval(chatPollingRef.current)
+        chatPollingRef.current = null
+      }
+      setView('list')
+      setShowMyMeetings(true)
+    } else if (view === 'list') {
       onBack()
     } else {
       setView('list')
@@ -344,6 +370,63 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
       setSelectedMeeting(null)
     }
   }
+
+  // 채팅 관련 함수
+  const openChatRoom = async (roomId: number, roomName: string) => {
+    setChatRoomId(roomId)
+    setChatRoomName(roomName)
+    setChatMessages([])
+    setView('chat')
+    await loadChatMessages(roomId)
+    startChatPolling(roomId)
+  }
+
+  const loadChatMessages = async (roomId: number) => {
+    try {
+      const messages = await chatAPI.getMessages(roomId)
+      const userId = localStorage.getItem('user_id')
+      const messagesWithMine = messages.map((msg: ChatMessage) => ({
+        ...msg,
+        is_mine: String(msg.user_id) === userId
+      }))
+      setChatMessages(messagesWithMine)
+      setTimeout(() => chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
+    } catch (err) {
+      console.error('메시지 로드 실패:', err)
+    }
+  }
+
+  const startChatPolling = (roomId: number) => {
+    if (chatPollingRef.current) {
+      clearInterval(chatPollingRef.current)
+    }
+    chatPollingRef.current = setInterval(() => {
+      loadChatMessages(roomId)
+    }, 3000)
+  }
+
+  const sendChatMessage = async () => {
+    if (!chatInput.trim() || !chatRoomId || isSending) return
+    setIsSending(true)
+    try {
+      await chatAPI.sendMessage(chatRoomId, chatInput.trim())
+      setChatInput('')
+      await loadChatMessages(chatRoomId)
+    } catch (err) {
+      alert('메시지 전송에 실패했습니다.')
+    } finally {
+      setIsSending(false)
+    }
+  }
+
+  // 컴포넌트 언마운트 시 폴링 정리
+  useEffect(() => {
+    return () => {
+      if (chatPollingRef.current) {
+        clearInterval(chatPollingRef.current)
+      }
+    }
+  }, [])
 
   const addQuestion = () => {
     setClubForm(prev => ({ ...prev, qna_questions: [...prev.qna_questions, ''] }))
@@ -380,6 +463,7 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
           {view === 'edit' && (activeTab === 'club' ? '동아리 수정' : '과팅 수정')}
           {view === 'apply' && (activeTab === 'club' ? '동아리 신청' : '과팅 신청')}
           {view === 'applications' && '신청 목록'}
+          {view === 'chat' && chatRoomName}
         </h1>
       </header>
 
@@ -414,7 +498,7 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
       )}
 
       {/* 컨텐츠 */}
-      <div className="flex-1 overflow-y-auto">
+      <div className={`flex-1 ${view === 'chat' ? 'flex flex-col' : 'overflow-y-auto'}`}>
         {/* 리스트 뷰 */}
         {view === 'list' && (
           <div className="p-4">
@@ -537,9 +621,7 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
                         {meeting.status === 'matched' && meeting.chat_room_id && (
                           <div className="mt-3 pt-3 border-t border-border/50">
                             <button
-                              onClick={() => {
-                                alert(`채팅방 ID: ${meeting.chat_room_id}\n익명 채팅 메뉴에서 과팅 채팅방을 확인하세요.`)
-                              }}
+                              onClick={() => openChatRoom(meeting.chat_room_id!, `${meeting.department} 과팅`)}
                               className="w-full py-2.5 text-sm font-medium text-white bg-green-500 rounded-lg flex items-center justify-center gap-2"
                             >
                               <MessageCircle className="w-4 h-4" />
@@ -1043,6 +1125,64 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
               ))
             )}
           </div>
+        )}
+
+        {/* 채팅 뷰 */}
+        {view === 'chat' && chatRoomId && (
+          <>
+            {/* 메시지 목록 */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {chatMessages.length === 0 ? (
+                <div className="text-center py-10">
+                  <MessageCircle className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">아직 메시지가 없습니다</p>
+                  <p className="text-sm text-muted-foreground mt-1">첫 메시지를 보내보세요!</p>
+                </div>
+              ) : (
+                chatMessages.map((msg) => (
+                  <div
+                    key={msg.id}
+                    className={`flex ${msg.is_mine ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div
+                      className={`max-w-[75%] rounded-2xl px-4 py-2.5 ${
+                        msg.is_mine
+                          ? 'bg-green-500 text-white rounded-br-md'
+                          : 'bg-card border border-border/50 text-foreground rounded-bl-md'
+                      }`}
+                    >
+                      <p className="text-sm whitespace-pre-wrap break-words">{msg.message}</p>
+                      <p className={`text-xs mt-1 ${msg.is_mine ? 'text-green-100' : 'text-muted-foreground'}`}>
+                        {new Date(msg.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+              <div ref={chatEndRef} />
+            </div>
+
+            {/* 메시지 입력 */}
+            <div className="flex-shrink-0 p-4 border-t border-border/50 bg-background">
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && sendChatMessage()}
+                  placeholder="메시지를 입력하세요..."
+                  className="flex-1 px-4 py-3 bg-card border border-border rounded-xl text-foreground"
+                />
+                <button
+                  onClick={sendChatMessage}
+                  disabled={!chatInput.trim() || isSending}
+                  className="w-12 h-12 bg-green-500 text-white rounded-xl flex items-center justify-center disabled:opacity-50"
+                >
+                  <Send className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          </>
         )}
       </div>
 
