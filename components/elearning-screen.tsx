@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ArrowLeft, BookOpen, Video, FileText, MessageSquare, CheckCircle2, Clock, AlertCircle, RefreshCw, Lock, Loader2, Bell, X, ChevronRight } from 'lucide-react'
+import { ArrowLeft, BookOpen, Video, FileText, MessageSquare, CheckCircle2, Clock, AlertCircle, Lock, Loader2, Bell, ChevronRight } from 'lucide-react'
 import { canvasAPI } from '@/lib/api'
 
 interface TodoItem {
@@ -370,13 +370,19 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
     )
   }
 
+  // 공지사항 목록에서 뒤로 가면서 자동 리프레시
+  const handleBackFromAnnouncements = () => {
+    setShowAnnouncementsList(false)
+    loadData() // 자동 리프레시
+  }
+
   // 공지사항 목록 모달
   if (showAnnouncementsList) {
     return (
       <div className="fixed inset-0 bg-background flex flex-col z-50">
         <header className="flex-shrink-0 px-4 py-3 flex items-center gap-3 border-b border-border/50">
           <button
-            onClick={() => setShowAnnouncementsList(false)}
+            onClick={handleBackFromAnnouncements}
             className="w-10 h-10 rounded-full bg-card flex items-center justify-center hover:bg-muted transition-colors"
           >
             <ArrowLeft className="w-5 h-5 text-foreground" />
@@ -488,23 +494,14 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
   return (
     <div className="fixed inset-0 bg-background flex flex-col z-50">
       {/* 헤더 */}
-      <header className="flex-shrink-0 px-4 py-3 flex items-center justify-between border-b border-border/50">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onBack}
-            className="w-10 h-10 rounded-full bg-card flex items-center justify-center hover:bg-muted transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5 text-foreground" />
-          </button>
-          <h1 className="text-lg font-semibold text-foreground">E-러닝</h1>
-        </div>
+      <header className="flex-shrink-0 px-4 py-3 flex items-center gap-3 border-b border-border/50">
         <button
-          onClick={checkSessionAndLoad}
-          disabled={isLoading}
+          onClick={onBack}
           className="w-10 h-10 rounded-full bg-card flex items-center justify-center hover:bg-muted transition-colors"
         >
-          <RefreshCw className={`w-5 h-5 text-muted-foreground ${isLoading ? 'animate-spin' : ''}`} />
+          <ArrowLeft className="w-5 h-5 text-foreground" />
         </button>
+        <h1 className="text-lg font-semibold text-foreground">E-러닝</h1>
       </header>
 
       {/* 컨텐츠 */}
