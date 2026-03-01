@@ -65,14 +65,25 @@ async def get_my_meetings(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """내가 작성한 과팅 목록 + 내가 신청해서 매칭된 과팅"""
+    """내가 작성한 과팅 목록 + 내가 신청해서 매칭된 과팅 (최신 활동순)"""
+    from sqlalchemy import func
+
+    result = []
+
     # 내가 작성한 과팅
     my_meetings = db.query(Meeting).filter(
         Meeting.user_id == current_user.id
-    ).order_by(Meeting.created_at.desc()).all()
+    ).all()
 
-    result = []
     for meeting in my_meetings:
+        # 마지막 채팅 시간 조회
+        last_chat_time = None
+        if meeting.chat_room_id:
+            last_msg = db.query(func.max(ChatMessage.created_at)).filter(
+                ChatMessage.room_id == meeting.chat_room_id
+            ).scalar()
+            last_chat_time = last_msg
+
         result.append({
             "id": meeting.id,
             "user_id": meeting.user_id,
@@ -82,6 +93,8 @@ async def get_my_meetings(
             "status": meeting.status,
             "chat_room_id": meeting.chat_room_id,
             "created_at": meeting.created_at.isoformat() if meeting.created_at else "",
+            "updated_at": meeting.updated_at.isoformat() if meeting.updated_at else "",
+            "last_activity": (last_chat_time or meeting.updated_at or meeting.created_at).isoformat() if (last_chat_time or meeting.updated_at or meeting.created_at) else "",
             "application_count": len(meeting.applications),
             "is_mine": True,
             "is_applicant": False
@@ -96,6 +109,14 @@ async def get_my_meetings(
     for app in matched_applications:
         meeting = app.meeting
         if meeting:
+            # 마지막 채팅 시간 조회
+            last_chat_time = None
+            if meeting.chat_room_id:
+                last_msg = db.query(func.max(ChatMessage.created_at)).filter(
+                    ChatMessage.room_id == meeting.chat_room_id
+                ).scalar()
+                last_chat_time = last_msg
+
             result.append({
                 "id": meeting.id,
                 "user_id": meeting.user_id,
@@ -105,10 +126,18 @@ async def get_my_meetings(
                 "status": meeting.status,
                 "chat_room_id": meeting.chat_room_id,
                 "created_at": meeting.created_at.isoformat() if meeting.created_at else "",
+                "updated_at": meeting.updated_at.isoformat() if meeting.updated_at else "",
+                "last_activity": (last_chat_time or meeting.updated_at or meeting.created_at).isoformat() if (last_chat_time or meeting.updated_at or meeting.created_at) else "",
                 "application_count": len(meeting.applications),
                 "is_mine": False,
                 "is_applicant": True
             })
+
+    # 최신 활동순으로 정렬 (매칭된 것이 위로, 그 다음 최신 활동순)
+    result.sort(key=lambda x: (
+        x["status"] != "matched",  # matched가 먼저
+        x["last_activity"]
+    ), reverse=True)
 
     return result
 
@@ -374,29 +403,38 @@ async def leave_meeting_chat(
     if meeting.user_id != current_user.id and (not matched_app or matched_app.user_id != current_user.id):
         raise HTTPException(status_code=403, detail="권한이 없습니다.")
 
-    # 채팅방 삭제
-    if meeting.chat_room_id:
-        # 채팅방 멤버 삭제
-        db.query(ChatRoomMember).filter(
-            ChatRoomMember.room_id == meeting.chat_room_id
-        ).delete()
-        # 채팅 메시지 삭제
-        db.query(ChatMessage).filter(
-            ChatMessage.room_id == meeting.chat_room_id
-        ).delete()
-        # 채팅방 삭제
-        db.query(ChatRoom).filter(
-            ChatRoom.id == meeting.chat_room_id
-        ).delete()
+    # 채팅방 ID 저장
+    chat_room_id = meeting.chat_room_id
 
-    # 매칭 해제
+    # 먼저 매칭 해제 (외래키 참조 해제)
     if matched_app:
         matched_app.is_matched = 0
     meeting.status = "closed"
     meeting.matched_application_id = None
     meeting.chat_room_id = None
-
     db.commit()
+
+    # 채팅방 삭제 (외래키 참조가 없어진 후)
+    if chat_room_id:
+        try:
+            # 채팅 메시지 삭제
+            db.query(ChatMessage).filter(
+                ChatMessage.room_id == chat_room_id
+            ).delete(synchronize_session=False)
+            # 채팅방 멤버 삭제
+            db.query(ChatRoomMember).filter(
+                ChatRoomMember.room_id == chat_room_id
+            ).delete(synchronize_session=False)
+            # 채팅방 삭제
+            db.query(ChatRoom).filter(
+                ChatRoom.id == chat_room_id
+            ).delete(synchronize_session=False)
+            db.commit()
+        except Exception as e:
+            # 삭제 실패해도 매칭 해제는 완료됨
+            db.rollback()
+            print(f"채팅방 삭제 오류: {e}")
+
     return {"message": "채팅방을 나갔습니다. 매칭이 해제되었습니다."}
 
 

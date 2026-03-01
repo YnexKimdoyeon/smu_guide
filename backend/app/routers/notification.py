@@ -4,7 +4,7 @@
 from datetime import datetime
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
@@ -13,6 +13,7 @@ from app.models.notification import AppLastViewed
 from app.models.friend import Friend
 from app.models.club import Club, ClubApplication
 from app.models.meeting import Meeting, MeetingApplication
+from app.models.chat import ChatMessage, ChatRoomMember
 
 router = APIRouter(prefix="/notifications", tags=["알림"])
 
@@ -48,7 +49,7 @@ async def get_notification_badges(
     if pending_requests > 0:
         badges["friends"] = pending_requests
 
-    # 2. 커뮤니티 - 내 동아리/과팅에 새 신청
+    # 2. 커뮤니티 - 내 동아리/과팅에 새 신청 + 매칭 알림 + 새 채팅
     community_last = get_last_viewed(db, current_user.id, "community")
 
     # 내 동아리에 새 신청
@@ -65,7 +66,46 @@ async def get_notification_badges(
         MeetingApplication.created_at > community_last
     ).count()
 
-    community_total = new_club_apps + new_meeting_apps
+    # 내 신청이 새로 매칭됨 (내가 신청자인 경우)
+    new_matches = db.query(MeetingApplication).filter(
+        MeetingApplication.user_id == current_user.id,
+        MeetingApplication.is_matched == 1
+    ).join(Meeting, Meeting.id == MeetingApplication.meeting_id).filter(
+        Meeting.updated_at > community_last
+    ).count()
+
+    # 내 매칭된 과팅 채팅방에 새 메시지
+    # 1) 내가 작성한 매칭된 과팅
+    my_matched_meetings = db.query(Meeting).filter(
+        Meeting.user_id == current_user.id,
+        Meeting.status == "matched",
+        Meeting.chat_room_id.isnot(None)
+    ).all()
+
+    # 2) 내가 신청해서 매칭된 과팅
+    my_matched_apps = db.query(MeetingApplication).filter(
+        MeetingApplication.user_id == current_user.id,
+        MeetingApplication.is_matched == 1
+    ).all()
+
+    matched_room_ids = []
+    for m in my_matched_meetings:
+        if m.chat_room_id:
+            matched_room_ids.append(m.chat_room_id)
+    for app in my_matched_apps:
+        if app.meeting and app.meeting.chat_room_id:
+            matched_room_ids.append(app.meeting.chat_room_id)
+
+    # 새 채팅 메시지 수 (내가 보낸 것 제외)
+    new_chat_count = 0
+    if matched_room_ids:
+        new_chat_count = db.query(ChatMessage).filter(
+            ChatMessage.room_id.in_(matched_room_ids),
+            ChatMessage.user_id != current_user.id,
+            ChatMessage.created_at > community_last
+        ).count()
+
+    community_total = new_club_apps + new_meeting_apps + new_matches + new_chat_count
     if community_total > 0:
         badges["community"] = community_total
 
