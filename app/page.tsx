@@ -17,8 +17,12 @@ import type { User } from '@/lib/store'
 
 type Screen = 'login' | 'dashboard' | AppId
 
+// 선문대 정보 하위 앱들
+const sunmoonSubApps: Screen[] = ['academic-calendar', 'announcements', 'phonebook']
+
 export default function Home() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('login')
+  const [previousScreen, setPreviousScreen] = useState<Screen | null>(null)
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
@@ -69,11 +73,18 @@ export default function Home() {
   }
 
   const handleOpenApp = (appId: AppId) => {
+    setPreviousScreen(currentScreen)
     setCurrentScreen(appId)
   }
 
   const handleBack = () => {
-    setCurrentScreen('dashboard')
+    // 선문대 정보 하위 앱에서 뒤로가면 선문대 정보로
+    if (sunmoonSubApps.includes(currentScreen) && previousScreen === 'sunmoon-info') {
+      setCurrentScreen('sunmoon-info')
+    } else {
+      setCurrentScreen('dashboard')
+    }
+    setPreviousScreen(null)
   }
 
   if (isLoading) {
@@ -123,7 +134,10 @@ export default function Home() {
       {currentScreen === 'sunmoon-info' && (
         <SunmoonInfoScreen
           onBack={handleBack}
-          onOpenSubApp={(subAppId) => setCurrentScreen(subAppId)}
+          onOpenSubApp={(subAppId) => {
+            setPreviousScreen('sunmoon-info')
+            setCurrentScreen(subAppId)
+          }}
         />
       )}
     </div>
