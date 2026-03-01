@@ -11,6 +11,7 @@ import { PhonebookScreen } from '@/components/phonebook-screen'
 import { FriendsScreen } from '@/components/friends-screen'
 import { ElearningScreen } from '@/components/elearning-screen'
 import { CalendarScreen } from '@/components/calendar-screen'
+import { SunmoonInfoScreen } from '@/components/sunmoon-info-screen'
 import { authAPI, getToken, removeToken } from '@/lib/api'
 import type { User } from '@/lib/store'
 
@@ -118,6 +119,12 @@ export default function Home() {
       )}
       {currentScreen === 'academic-calendar' && (
         <CalendarScreen onBack={handleBack} />
+      )}
+      {currentScreen === 'sunmoon-info' && (
+        <SunmoonInfoScreen
+          onBack={handleBack}
+          onOpenSubApp={(subAppId) => setCurrentScreen(subAppId)}
+        />
       )}
     </div>
   )
