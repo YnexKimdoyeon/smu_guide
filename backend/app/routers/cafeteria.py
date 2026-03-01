@@ -23,6 +23,21 @@ CAFETERIA_NAMES = {
 }
 
 
+def extract_menu_items(cell) -> List[str]:
+    """셀에서 메뉴 항목 추출 (br 태그로 구분)"""
+    # br 태그를 특수 구분자로 치환
+    cell_html = str(cell)
+    cell_html = re.sub(r'<br\s*/?>', '|||', cell_html, flags=re.IGNORECASE)
+
+    # 다시 파싱해서 텍스트만 추출
+    cell_soup = BeautifulSoup(cell_html, 'html.parser')
+    text = cell_soup.get_text()
+
+    # 구분자로 분리하고 정리
+    items = [item.strip() for item in text.split('|||') if item.strip()]
+    return items
+
+
 def parse_menu_html(html: str) -> dict:
     """식단 HTML 파싱"""
     soup = BeautifulSoup(html, 'html.parser')
@@ -53,24 +68,29 @@ def parse_menu_html(html: str) -> dict:
     if date_span:
         result["date_range"] = date_span.get_text(strip=True)
 
-    # 모든 행 가져오기
-    all_rows = table.find_all('tr')
-
-    # 헤더에서 카테고리 추출
-    for row in all_rows:
-        ths = row.find_all('th')
-        if len(ths) > 1:
-            first_th_text = ths[0].get_text(strip=True)
-            if first_th_text == '일자':
+    # thead에서 카테고리 추출
+    thead = table.find('thead')
+    if thead:
+        header_rows = thead.find_all('tr')
+        for row in header_rows:
+            ths = row.find_all('th')
+            # '일자' 헤더가 있는 행 찾기
+            if ths and ths[0].get_text(strip=True) == '일자':
                 for th in ths[1:]:
                     cat_text = th.get_text(strip=True)
                     if cat_text:
                         result["menu_categories"].append(cat_text)
                 break
 
-    # 일별 메뉴 추출
-    for row in all_rows:
-        # 첫 번째 th 또는 td에서 날짜 찾기
+    # tbody에서 일별 메뉴 추출
+    tbody = table.find('tbody')
+    if tbody:
+        rows = tbody.find_all('tr')
+    else:
+        rows = table.find_all('tr')
+
+    for row in rows:
+        # 첫 번째 셀에서 날짜 찾기
         first_cell = row.find(['th', 'td'])
         if not first_cell:
             continue
@@ -81,23 +101,8 @@ def parse_menu_html(html: str) -> dict:
         if not re.match(r'\d{2}\.\d{2}', date_text):
             continue
 
-        # 메뉴 셀들 찾기 (날짜 셀 이후의 td들)
-        all_cells = row.find_all(['th', 'td'])
-        menu_cells = []
-
-        # 첫 번째 셀이 날짜면, 나머지는 메뉴
-        found_date = False
-        for cell in all_cells:
-            cell_text = cell.get_text(strip=True)
-            if re.match(r'\d{2}\.\d{2}', cell_text) and not found_date:
-                found_date = True
-                continue
-            if found_date:
-                menu_cells.append(cell)
-
-        if not menu_cells:
-            # th가 날짜고 td가 메뉴인 경우
-            menu_cells = row.find_all('td')
+        # 메뉴 셀들 찾기 (td만)
+        menu_cells = row.find_all('td')
 
         if not menu_cells:
             continue
@@ -108,18 +113,7 @@ def parse_menu_html(html: str) -> dict:
         }
 
         for td in menu_cells:
-            # td 내용을 줄바꿈으로 분리
-            # 먼저 HTML에서 br 태그를 실제 줄바꿈으로 변환
-            for br in td.find_all('br'):
-                br.replace_with('\n')
-
-            td_text = td.get_text(strip=True)
-            if td_text:
-                # 줄바꿈으로 분리
-                menu_items = [item.strip() for item in td_text.split('\n') if item.strip()]
-            else:
-                menu_items = []
-
+            menu_items = extract_menu_items(td)
             day_menu["menus"].append(menu_items)
 
         result["daily_menus"].append(day_menu)
