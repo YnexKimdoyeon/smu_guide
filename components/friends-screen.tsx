@@ -386,7 +386,7 @@ export function FriendsScreen({ onBack }: FriendsScreenProps) {
                 freeTimeResults.map((slot, idx) => (
                   <div
                     key={idx}
-                    className="p-4 bg-card rounded-2xl border border-border/50 shadow-sm flex items-center justify-between"
+                    className="p-4 bg-card rounded-2xl border border-border/50 shadow-sm"
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
@@ -399,9 +399,6 @@ export function FriendsScreen({ onBack }: FriendsScreenProps) {
                         </p>
                       </div>
                     </div>
-                    <button className="px-3 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold hover:bg-primary/90 active:scale-95 transition-all shadow-sm">
-                      약속 잡기
-                    </button>
                   </div>
                 ))
               )}
