@@ -454,3 +454,134 @@ export const cafeteriaAPI = {
     return fetchAPI(`/cafeteria/menu/${cafeteriaType}${query}`)
   },
 }
+
+// 동아리 API
+export const clubAPI = {
+  // 목록 조회
+  getClubs: async () => {
+    return fetchAPI('/clubs')
+  },
+
+  // 상세 조회
+  getClub: async (id: number) => {
+    return fetchAPI(`/clubs/${id}`)
+  },
+
+  // 등록
+  createClub: async (data: { name: string; description: string; qna_questions?: string[] }) => {
+    return fetchAPI('/clubs', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  // 수정
+  updateClub: async (id: number, data: { name?: string; description?: string; qna_questions?: string[] }) => {
+    return fetchAPI(`/clubs/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  },
+
+  // 삭제
+  deleteClub: async (id: number) => {
+    return fetchAPI(`/clubs/${id}`, {
+      method: 'DELETE',
+    })
+  },
+
+  // 신청
+  applyClub: async (id: number, data: { name: string; student_id: string; qna_answers?: Record<string, string> }) => {
+    return fetchAPI(`/clubs/${id}/apply`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  // 신청 목록 조회
+  getApplications: async (id: number) => {
+    return fetchAPI(`/clubs/${id}/applications`)
+  },
+
+  // 신청 삭제
+  deleteApplication: async (clubId: number, applicationId: number) => {
+    return fetchAPI(`/clubs/${clubId}/applications/${applicationId}`, {
+      method: 'DELETE',
+    })
+  },
+}
+
+// 과팅 API
+export const meetingAPI = {
+  // 목록 조회
+  getMeetings: async () => {
+    return fetchAPI('/meetings')
+  },
+
+  // 내 과팅 목록
+  getMyMeetings: async () => {
+    return fetchAPI('/meetings/my')
+  },
+
+  // 상세 조회
+  getMeeting: async (id: number) => {
+    return fetchAPI(`/meetings/${id}`)
+  },
+
+  // 등록
+  createMeeting: async (data: { department: string; member_count: number; description?: string }) => {
+    return fetchAPI('/meetings', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  // 수정
+  updateMeeting: async (id: number, data: { member_count?: number; description?: string }) => {
+    return fetchAPI(`/meetings/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  },
+
+  // 삭제
+  deleteMeeting: async (id: number) => {
+    return fetchAPI(`/meetings/${id}`, {
+      method: 'DELETE',
+    })
+  },
+
+  // 마감
+  closeMeeting: async (id: number) => {
+    return fetchAPI(`/meetings/${id}/close`, {
+      method: 'PUT',
+    })
+  },
+
+  // 신청
+  applyMeeting: async (id: number, data: { department: string; member_count: number; message?: string }) => {
+    return fetchAPI(`/meetings/${id}/apply`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  // 신청 목록 조회
+  getApplications: async (id: number) => {
+    return fetchAPI(`/meetings/${id}/applications`)
+  },
+
+  // 매칭
+  matchMeeting: async (meetingId: number, applicationId: number) => {
+    return fetchAPI(`/meetings/${meetingId}/match/${applicationId}`, {
+      method: 'POST',
+    })
+  },
+
+  // 신청 삭제
+  deleteApplication: async (meetingId: number, applicationId: number) => {
+    return fetchAPI(`/meetings/${meetingId}/applications/${applicationId}`, {
+      method: 'DELETE',
+    })
+  },
+}

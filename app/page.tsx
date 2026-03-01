@@ -13,6 +13,7 @@ import { ElearningScreen } from '@/components/elearning-screen'
 import { CalendarScreen } from '@/components/calendar-screen'
 import { SunmoonInfoScreen } from '@/components/sunmoon-info-screen'
 import { CafeteriaScreen } from '@/components/cafeteria-screen'
+import { CommunityScreen } from '@/components/community-screen'
 import { authAPI, getToken, removeToken } from '@/lib/api'
 import type { User } from '@/lib/store'
 
@@ -143,6 +144,14 @@ export default function Home() {
       )}
       {currentScreen === 'cafeteria' && (
         <CafeteriaScreen onBack={handleBack} />
+      )}
+      {currentScreen === 'community' && user && (
+        <CommunityScreen
+          onBack={handleBack}
+          userDepartment={user.department}
+          userName={user.name}
+          userStudentId={user.studentId}
+        />
       )}
     </div>
   )
