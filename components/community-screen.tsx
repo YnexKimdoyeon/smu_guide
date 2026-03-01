@@ -68,6 +68,8 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
   const [view, setView] = useState<View>('list')
   const [clubs, setClubs] = useState<Club[]>([])
   const [meetings, setMeetings] = useState<Meeting[]>([])
+  const [myMeetings, setMyMeetings] = useState<Meeting[]>([])
+  const [showMyMeetings, setShowMyMeetings] = useState(false)
   const [selectedClub, setSelectedClub] = useState<Club | null>(null)
   const [selectedMeeting, setSelectedMeeting] = useState<Meeting | null>(null)
   const [clubApplications, setClubApplications] = useState<ClubApplication[]>([])
@@ -99,8 +101,12 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
         const data = await clubAPI.getClubs()
         setClubs(data)
       } else {
-        const data = await meetingAPI.getMeetings()
-        setMeetings(data)
+        const [allData, myData] = await Promise.all([
+          meetingAPI.getMeetings(),
+          meetingAPI.getMyMeetings()
+        ])
+        setMeetings(allData)
+        setMyMeetings(myData)
       }
     } catch (err) {
       console.error(err)
@@ -467,40 +473,82 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
                 </div>
               )
             ) : (
-              meetings.length === 0 ? (
-                <div className="text-center py-20">
-                  <Heart className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground">등록된 과팅이 없습니다</p>
+              <div className="space-y-4">
+                {/* 내 과팅 / 전체 과팅 토글 */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowMyMeetings(false)}
+                    className={`flex-1 py-2 text-xs font-medium rounded-lg transition-all ${
+                      !showMyMeetings ? 'bg-pink-500 text-white' : 'bg-card text-muted-foreground border border-border/50'
+                    }`}
+                  >
+                    전체 과팅
+                  </button>
+                  <button
+                    onClick={() => setShowMyMeetings(true)}
+                    className={`flex-1 py-2 text-xs font-medium rounded-lg transition-all ${
+                      showMyMeetings ? 'bg-pink-500 text-white' : 'bg-card text-muted-foreground border border-border/50'
+                    }`}
+                  >
+                    내 과팅 ({myMeetings.length})
+                  </button>
                 </div>
-              ) : (
-                <div className="space-y-3">
-                  {meetings.map(meeting => (
-                    <div
-                      key={meeting.id}
-                      className="bg-card rounded-xl p-4 border border-border/50"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1" onClick={() => handleViewMeeting(meeting)}>
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-semibold text-foreground">{meeting.department}</h3>
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-pink-100 text-pink-600">
-                              {meeting.member_count}명
-                            </span>
-                            {meeting.status === 'closed' && (
-                              <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">마감</span>
+
+                {(showMyMeetings ? myMeetings : meetings).length === 0 ? (
+                  <div className="text-center py-20">
+                    <Heart className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">
+                      {showMyMeetings ? '등록한 과팅이 없습니다' : '등록된 과팅이 없습니다'}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {(showMyMeetings ? myMeetings : meetings).map(meeting => (
+                      <div
+                        key={meeting.id}
+                        className={`bg-card rounded-xl p-4 border ${
+                          meeting.status === 'matched' ? 'border-green-300 bg-green-50/50' : 'border-border/50'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1" onClick={() => handleViewMeeting(meeting)}>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-semibold text-foreground">{meeting.department}</h3>
+                              <span className="text-xs px-2 py-0.5 rounded-full bg-pink-100 text-pink-600">
+                                {meeting.member_count}명
+                              </span>
+                              {meeting.status === 'closed' && (
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">마감</span>
+                              )}
+                              {meeting.status === 'matched' && (
+                                <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-600">매칭완료</span>
+                              )}
+                            </div>
+                            {meeting.description && (
+                              <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{meeting.description}</p>
                             )}
+                            <div className="flex items-center gap-3 mt-2">
+                              <span className="text-xs text-pink-500">신청 {meeting.application_count}명</span>
+                            </div>
                           </div>
-                          {meeting.description && (
-                            <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{meeting.description}</p>
-                          )}
-                          <div className="flex items-center gap-3 mt-2">
-                            <span className="text-xs text-pink-500">신청 {meeting.application_count}명</span>
-                          </div>
+                          <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0" />
                         </div>
-                        <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0" />
-                      </div>
-                      {meeting.is_mine && (
-                        <div className="flex gap-2 mt-3 pt-3 border-t border-border/50">
+                        {/* 매칭 완료된 경우 채팅방 버튼 */}
+                        {meeting.status === 'matched' && meeting.chat_room_id && (
+                          <div className="mt-3 pt-3 border-t border-border/50">
+                            <button
+                              onClick={() => {
+                                alert(`채팅방 ID: ${meeting.chat_room_id}\n익명 채팅 메뉴에서 과팅 채팅방을 확인하세요.`)
+                              }}
+                              className="w-full py-2.5 text-sm font-medium text-white bg-green-500 rounded-lg flex items-center justify-center gap-2"
+                            >
+                              <MessageCircle className="w-4 h-4" />
+                              채팅방 열기
+                            </button>
+                          </div>
+                        )}
+                        {meeting.is_mine && meeting.status !== 'matched' && (
+                          <div className="flex gap-2 mt-3 pt-3 border-t border-border/50">
                           <button
                             onClick={() => handleViewMeetingApplications(meeting)}
                             className="flex-1 py-2 text-xs font-medium text-pink-500 bg-pink-50 rounded-lg"
@@ -523,8 +571,9 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
                       )}
                     </div>
                   ))}
-                </div>
-              )
+                  </div>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -812,8 +861,8 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
                 <input
                   type="text"
                   value={applyForm.name}
-                  onChange={(e) => setApplyForm(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full mt-1 px-4 py-3 bg-card border border-border rounded-xl text-foreground"
+                  disabled
+                  className="w-full mt-1 px-4 py-3 bg-muted border border-border rounded-xl text-muted-foreground cursor-not-allowed"
                 />
               </div>
               <div>
@@ -821,8 +870,8 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
                 <input
                   type="text"
                   value={applyForm.student_id}
-                  onChange={(e) => setApplyForm(prev => ({ ...prev, student_id: e.target.value }))}
-                  className="w-full mt-1 px-4 py-3 bg-card border border-border rounded-xl text-foreground"
+                  disabled
+                  className="w-full mt-1 px-4 py-3 bg-muted border border-border rounded-xl text-muted-foreground cursor-not-allowed"
                 />
               </div>
               {selectedClub.qna_questions && selectedClub.qna_questions.length > 0 && (
