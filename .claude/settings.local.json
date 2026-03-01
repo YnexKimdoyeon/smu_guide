@@ -8,7 +8,14 @@
       "Bash(git push:*)",
       "WebFetch(domain:www.swing2app.co.kr)",
       "Bash(xargs:*)",
-      "Bash(git restore:*)"
+      "Bash(git restore:*)",
+      "WebFetch(domain:info.sunmoon.ac.kr)",
+      "WebFetch(domain:www.sunmoon.ac.kr)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:coop.sunmoon.ac.kr)"
     ]
   }
 }

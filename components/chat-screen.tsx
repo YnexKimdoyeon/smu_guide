@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { Send, Users, ArrowLeft, Globe, BookOpen, Shuffle, X, Loader2, Ban, Flag, AlertTriangle, Settings, Trash2 } from 'lucide-react'
 import { AppShell } from './app-shell'
 import { chatAPI, randomChatAPI, blockAPI } from '@/lib/api'
+import { useAlert } from './alert-context'
 
 interface ChatRoom {
   id: number
@@ -48,6 +49,7 @@ type ChatMode = 'list' | 'room' | 'random-waiting' | 'random-chat'
 const WS_BASE_URL = process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000'
 
 export function ChatScreen({ onBack }: ChatScreenProps) {
+  const { showToast } = useAlert()
   const [rooms, setRooms] = useState<ChatRoom[]>([])
   const [selectedRoom, setSelectedRoom] = useState<ChatRoom | null>(null)
   const [messages, setMessages] = useState<ChatMessage[]>([])
@@ -103,10 +105,10 @@ export function ChatScreen({ onBack }: ChatScreenProps) {
       } else {
         setRandomMessages(prev => prev.filter(m => m.user_id !== actionModal.userId))
       }
-      alert('차단되었습니다.')
+      showToast('차단되었습니다.', 'success')
       setActionModal(null)
     } catch (error: any) {
-      alert(error.message || '차단에 실패했습니다.')
+      showToast(error.message || '차단에 실패했습니다.', 'error')
     } finally {
       setIsProcessing(false)
     }
@@ -127,13 +129,13 @@ export function ChatScreen({ onBack }: ChatScreenProps) {
         message_id: actionModal.messageId,
         room_type: actionModal.roomType,
       })
-      alert('신고가 접수되었습니다.')
+      showToast('신고가 접수되었습니다.', 'success')
       setShowReportModal(false)
       setReportReason('')
       setReportDetail('')
       setActionModal(null)
     } catch (error: any) {
-      alert(error.message || '신고에 실패했습니다.')
+      showToast(error.message || '신고에 실패했습니다.', 'error')
     } finally {
       setIsProcessing(false)
     }
@@ -169,9 +171,9 @@ export function ChatScreen({ onBack }: ChatScreenProps) {
       await blockAPI.unblockUser(blockedUserId)
       setBlockedUsers(prev => prev.filter(u => u.blocked_user_id !== blockedUserId))
       setBlockedUserIds(prev => prev.filter(id => id !== blockedUserId))
-      alert('차단이 해제되었습니다.')
+      showToast('차단이 해제되었습니다.', 'success')
     } catch (error: any) {
-      alert(error.message || '차단 해제에 실패했습니다.')
+      showToast(error.message || '차단 해제에 실패했습니다.', 'error')
     }
   }
 

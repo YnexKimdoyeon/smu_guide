@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { ArrowLeft, Plus, Users, Heart, Edit2, Trash2, ChevronRight, UserPlus, Check, X, MessageCircle, Send, LogOut } from 'lucide-react'
 import { clubAPI, meetingAPI, chatAPI } from '@/lib/api'
+import { useAlert } from './alert-context'
 
 interface CommunityScreenProps {
   onBack: () => void
@@ -74,6 +75,7 @@ interface MeetingApplication {
 }
 
 export function CommunityScreen({ onBack, userDepartment, userName, userStudentId }: CommunityScreenProps) {
+  const { showToast, showConfirm } = useAlert()
   const [activeTab, setActiveTab] = useState<Tab>('club')
   const [view, setView] = useState<View>('list')
   const [clubs, setClubs] = useState<Club[]>([])
@@ -142,7 +144,7 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
       setSelectedClub(detail)
       setView('detail')
     } catch (err) {
-      alert('동아리 정보를 불러올 수 없습니다.')
+      showToast('동아리 정보를 불러올 수 없습니다.', 'error')
     }
   }
 
@@ -152,13 +154,13 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
       setSelectedMeeting(detail)
       setView('detail')
     } catch (err) {
-      alert('과팅 정보를 불러올 수 없습니다.')
+      showToast('과팅 정보를 불러올 수 없습니다.', 'error')
     }
   }
 
   const handleCreateClub = async () => {
     if (!clubForm.name.trim() || !clubForm.description.trim()) {
-      alert('동아리 이름과 설명을 입력해주세요.')
+      showToast('동아리 이름과 설명을 입력해주세요.', 'warning')
       return
     }
     try {
@@ -172,7 +174,7 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
       setView('list')
       loadData()
     } catch (err) {
-      alert('등록에 실패했습니다.')
+      showToast('등록에 실패했습니다.', 'error')
     }
   }
 
@@ -188,18 +190,25 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
       setView('list')
       loadData()
     } catch (err) {
-      alert('수정에 실패했습니다.')
+      showToast('수정에 실패했습니다.', 'error')
     }
   }
 
   const handleDeleteClub = async (id: number) => {
-    if (!confirm('정말 삭제하시겠습니까?')) return
+    const confirmed = await showConfirm({
+      title: '동아리 삭제',
+      message: '정말 삭제하시겠습니까?',
+      confirmText: '삭제',
+      type: 'danger'
+    })
+    if (!confirmed) return
     try {
       await clubAPI.deleteClub(id)
       setView('list')
       loadData()
+      showToast('삭제되었습니다.', 'success')
     } catch (err) {
-      alert('삭제에 실패했습니다.')
+      showToast('삭제에 실패했습니다.', 'error')
     }
   }
 
@@ -211,11 +220,11 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
         student_id: applyForm.student_id,
         qna_answers: Object.keys(applyForm.qna_answers).length > 0 ? applyForm.qna_answers : undefined
       })
-      alert('신청이 완료되었습니다.')
+      showToast('신청이 완료되었습니다.', 'success')
       setView('list')
       loadData()
     } catch (err: any) {
-      alert(err.message || '신청에 실패했습니다.')
+      showToast(err.message || '신청에 실패했습니다.', 'error')
     }
   }
 
@@ -226,13 +235,13 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
       setSelectedClub(club)
       setView('applications')
     } catch (err) {
-      alert('신청 목록을 불러올 수 없습니다.')
+      showToast('신청 목록을 불러올 수 없습니다.', 'error')
     }
   }
 
   const handleCreateMeeting = async () => {
     if (meetingForm.member_count < 1) {
-      alert('인원수를 입력해주세요.')
+      showToast('인원수를 입력해주세요.', 'warning')
       return
     }
     try {
@@ -245,7 +254,7 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
       setView('list')
       loadData()
     } catch (err) {
-      alert('등록에 실패했습니다.')
+      showToast('등록에 실패했습니다.', 'error')
     }
   }
 
@@ -259,18 +268,25 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
       setView('list')
       loadData()
     } catch (err) {
-      alert('수정에 실패했습니다.')
+      showToast('수정에 실패했습니다.', 'error')
     }
   }
 
   const handleDeleteMeeting = async (id: number) => {
-    if (!confirm('정말 삭제하시겠습니까?')) return
+    const confirmed = await showConfirm({
+      title: '과팅 삭제',
+      message: '정말 삭제하시겠습니까?',
+      confirmText: '삭제',
+      type: 'danger'
+    })
+    if (!confirmed) return
     try {
       await meetingAPI.deleteMeeting(id)
       setView('list')
       loadData()
+      showToast('삭제되었습니다.', 'success')
     } catch (err) {
-      alert('삭제에 실패했습니다.')
+      showToast('삭제에 실패했습니다.', 'error')
     }
   }
 
@@ -282,11 +298,11 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
         member_count: meetingApplyForm.member_count,
         message: meetingApplyForm.message || undefined
       })
-      alert('신청이 완료되었습니다.')
+      showToast('신청이 완료되었습니다.', 'success')
       setView('list')
       loadData()
     } catch (err: any) {
-      alert(err.message || '신청에 실패했습니다.')
+      showToast(err.message || '신청에 실패했습니다.', 'error')
     }
   }
 
@@ -297,20 +313,26 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
       setSelectedMeeting(meeting)
       setView('applications')
     } catch (err) {
-      alert('신청 목록을 불러올 수 없습니다.')
+      showToast('신청 목록을 불러올 수 없습니다.', 'error')
     }
   }
 
   const handleMatchMeeting = async (applicationId: number) => {
     if (!selectedMeeting) return
-    if (!confirm('이 신청자와 매칭하시겠습니까?')) return
+    const confirmed = await showConfirm({
+      title: '매칭 확인',
+      message: '이 신청자와 매칭하시겠습니까?',
+      confirmText: '매칭',
+      type: 'info'
+    })
+    if (!confirmed) return
     try {
       const result = await meetingAPI.matchMeeting(selectedMeeting.id, applicationId)
-      alert('매칭이 완료되었습니다! 채팅방이 생성되었습니다.')
+      showToast('매칭이 완료되었습니다! 채팅방이 생성되었습니다.', 'success')
       setView('list')
       loadData()
     } catch (err: any) {
-      alert(err.message || '매칭에 실패했습니다.')
+      showToast(err.message || '매칭에 실패했습니다.', 'error')
     }
   }
 
@@ -388,12 +410,18 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
   // 채팅방 나가기
   const handleLeaveMeeting = async () => {
     if (!chatMeetingId || isLeaving) return
-    if (!confirm('채팅방을 나가면 매칭이 해제됩니다. 정말 나가시겠습니까?')) return
+    const confirmed = await showConfirm({
+      title: '채팅방 나가기',
+      message: '채팅방을 나가면 매칭이 해제됩니다. 정말 나가시겠습니까?',
+      confirmText: '나가기',
+      type: 'danger'
+    })
+    if (!confirmed) return
 
     setIsLeaving(true)
     try {
       await meetingAPI.leaveMeeting(chatMeetingId)
-      alert('채팅방을 나갔습니다.')
+      showToast('채팅방을 나갔습니다.', 'success')
       // 채팅 폴링 중지
       if (chatPollingRef.current) {
         clearInterval(chatPollingRef.current)
@@ -403,7 +431,7 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
       setShowMyMeetings(true)  // 내 과팅 탭 유지
       loadData()
     } catch (err: any) {
-      alert(err.message || '나가기에 실패했습니다.')
+      showToast(err.message || '나가기에 실패했습니다.', 'error')
     } finally {
       setIsLeaving(false)
     }
@@ -441,7 +469,7 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
       setChatInput('')
       await loadChatMessages(chatRoomId)
     } catch (err) {
-      alert('메시지 전송에 실패했습니다.')
+      showToast('메시지 전송에 실패했습니다.', 'error')
     } finally {
       setIsSending(false)
     }

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Search, UserPlus, Check, X, Clock, Calendar, User, Send, Trash2 } from 'lucide-react'
 import { AppShell } from './app-shell'
 import { friendAPI } from '@/lib/api'
+import { useAlert } from './alert-context'
 
 interface Friend {
   id: number
@@ -25,6 +26,7 @@ interface FriendsScreenProps {
 }
 
 export function FriendsScreen({ onBack }: FriendsScreenProps) {
+  const { showConfirm, showToast } = useAlert()
   const [searchQuery, setSearchQuery] = useState('')
   const [friends, setFriends] = useState<Friend[]>([])
   const [requests, setRequests] = useState<Friend[]>([])
@@ -109,14 +111,22 @@ export function FriendsScreen({ onBack }: FriendsScreenProps) {
   }
 
   const handleDeleteFriend = async (id: number) => {
-    if (!confirm('정말로 이 친구를 삭제하시겠습니까?')) return
+    const confirmed = await showConfirm({
+      title: '친구 삭제',
+      message: '정말로 이 친구를 삭제하시겠습니까?',
+      confirmText: '삭제',
+      type: 'danger'
+    })
+    if (!confirmed) return
 
     try {
       await friendAPI.deleteFriend(id)
       setFriends(friends.filter(f => f.id !== id))
       setSelectedFriends(selectedFriends.filter(fId => fId !== id))
+      showToast('친구가 삭제되었습니다.', 'success')
     } catch (error) {
       console.error('친구 삭제 실패:', error)
+      showToast('친구 삭제에 실패했습니다.', 'error')
     }
   }
 

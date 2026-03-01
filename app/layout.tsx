@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import { Noto_Sans_KR } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
+import { AlertProvider } from '@/components/alert-context'
 import './globals.css'
 
 const notoSansKR = Noto_Sans_KR({
@@ -30,7 +31,9 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <body className={`${notoSansKR.variable} font-sans antialiased`}>
-        {children}
+        <AlertProvider>
+          {children}
+        </AlertProvider>
         <Analytics />
       </body>
     </html>
