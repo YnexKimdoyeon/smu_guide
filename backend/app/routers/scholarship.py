@@ -2,7 +2,7 @@
 장학금 마일리지 API
 """
 import httpx
-from typing import Optional
+from typing import Optional, Dict
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from bs4 import BeautifulSoup
@@ -13,6 +13,12 @@ from app.models.user import User
 from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/scholarship", tags=["장학금"])
+
+# folio 세션 캐시 (user_id -> credentials)
+folio_credentials_cache: Dict[int, dict] = {}
+
+FOLIO_LOGIN_URL = "https://folio.sunmoon.ac.kr/hmpg/com/login/LoginConfirm.do"
+FOLIO_MILEAGE_URL = "https://folio.sunmoon.ac.kr/hmpg/efo/album/mlg/MlgList.do"
 
 
 class MileageData(BaseModel):
@@ -107,6 +113,25 @@ def parse_mileage_html(html: str) -> MileageData:
     return data
 
 
+async def login_folio(client: httpx.AsyncClient, login_id: str, password: str) -> bool:
+    """folio 로그인"""
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Content-Type': 'application/x-www-form-urlencoded',
+    }
+
+    login_data = {
+        'rtnUrl': '',
+        'bbsSn': '',
+        'loginId': login_id,
+        'loginPassword': password
+    }
+
+    response = await client.post(FOLIO_LOGIN_URL, headers=headers, data=login_data)
+    # 로그인 성공 여부 확인 (쿠키가 설정되면 성공)
+    return response.status_code == 200
+
+
 @router.get("/mileage")
 async def get_mileage(
     year: int = 2025,
@@ -117,21 +142,30 @@ async def get_mileage(
     마일리지 조회
     - year: 조회 연도 (2025, 2026 등)
     """
-    url = "https://folio.sunmoon.ac.kr/hmpg/efo/album/mlg/MlgList.do"
+    # 저장된 자격증명 확인
+    credentials = folio_credentials_cache.get(current_user.id)
+    if not credentials:
+        raise HTTPException(status_code=401, detail="다시 로그인해주세요.")
 
-    async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+    async with httpx.AsyncClient(verify=False, timeout=30.0, follow_redirects=True) as client:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Content-Type': 'application/x-www-form-urlencoded',
         }
 
-        data = {
-            'userId': current_user.student_id,
-            'year': str(year)
-        }
-
         try:
-            response = await client.post(url, headers=headers, data=data)
+            # 1. folio 로그인
+            login_success = await login_folio(client, credentials['login_id'], credentials['password'])
+            if not login_success:
+                raise HTTPException(status_code=401, detail="포트폴리오 로그인 실패")
+
+            # 2. 마일리지 조회 (세션 쿠키 자동 사용)
+            mileage_data_form = {
+                'userId': '',
+                'year': str(year)
+            }
+
+            response = await client.post(FOLIO_MILEAGE_URL, headers=headers, data=mileage_data_form)
 
             if response.status_code != 200:
                 raise HTTPException(status_code=500, detail="마일리지 정보를 가져올 수 없습니다.")
