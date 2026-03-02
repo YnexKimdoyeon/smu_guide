@@ -630,3 +630,29 @@ export const shuttleAPI = {
     return fetchAPI(`/shuttle/schedule?day_type=${dayType}&route=${encodeURIComponent(route)}`)
   },
 }
+
+// 관리자 API
+export const adminAPI = {
+  // 로그인
+  login: async (password: string) => {
+    return fetchAPI('/admin/login', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    })
+  },
+
+  // 통계 조회
+  getStats: async () => {
+    return fetchAPI('/admin/stats')
+  },
+
+  // 전체 유저 목록
+  getUsers: async () => {
+    return fetchAPI('/admin/users')
+  },
+
+  // 유저 상세 정보
+  getUserDetail: async (userId: number) => {
+    return fetchAPI(`/admin/users/${userId}`)
+  },
+}
