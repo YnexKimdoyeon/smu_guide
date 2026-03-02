@@ -53,6 +53,46 @@ def clean_text(text: str) -> str:
     return text.strip()
 
 
+def format_notice(raw_text: str) -> dict:
+    """안내사항 텍스트를 섹션별로 분류"""
+    holidays = []  # 공휴일 운행 안내
+    bus_info = []  # 시내버스 정보
+    general = []   # 일반 안내사항
+
+    seen = set()  # 중복 제거용
+
+    # 줄바꿈 정규화
+    text = raw_text.replace('\r\n', '\n').replace('\r', '\n')
+
+    # *로 시작하는 항목 분리 (공휴일 안내)
+    holiday_pattern = r'\*[^*\n]+'
+    holiday_matches = re.findall(holiday_pattern, text)
+    for match in holiday_matches:
+        item = clean_text(match)
+        if item and item not in seen:
+            holidays.append(item)
+            seen.add(item)
+
+    # - 로 시작하는 항목 분리
+    dash_pattern = r'-\s*[^-\n]+'
+    dash_matches = re.findall(dash_pattern, text)
+    for match in dash_matches:
+        item = clean_text(match)
+        if item and item not in seen:
+            # 시내버스 관련
+            if '번' in item and ('터미널' in item or '역' in item or '환승' in item):
+                bus_info.append(item)
+            else:
+                general.append(item)
+            seen.add(item)
+
+    return {
+        "holidays": holidays[:10],  # 최대 10개
+        "bus_info": bus_info[:10],
+        "general": general[:10]
+    }
+
+
 def parse_shuttle_html(html: str, route: str) -> dict:
     """셔틀버스 HTML에서 테이블 추출"""
     soup = BeautifulSoup(html, 'html.parser')
@@ -61,7 +101,11 @@ def parse_shuttle_html(html: str, route: str) -> dict:
         "route": route,
         "route_name": ROUTE_NAMES.get(route, route),
         "route_info": "",
-        "notice": "",
+        "notice": {
+            "holidays": [],
+            "bus_info": [],
+            "general": []
+        },
         "table_html": ""
     }
 
@@ -90,12 +134,11 @@ def parse_shuttle_html(html: str, route: str) -> dict:
             if table.find('thead') or table.find('tbody') or table.find('tr'):
                 # 테이블 내용이 있는지 확인
                 if table.get_text(strip=True):
-                    # 스타일 추가하여 반환
                     result["table_html"] = str(table)
                     break
 
     # 안내사항 추출
-    notice_parts = []
+    notice_texts = []
 
     # mgT30 div에서 안내사항 추출
     content_div = soup.find('div', id='tabcontent22') or soup.find('div', class_='shuttle_wrap')
@@ -103,12 +146,15 @@ def parse_shuttle_html(html: str, route: str) -> dict:
         for div in content_div.find_all('div', class_='mgT30'):
             # 테이블이 아닌 텍스트만
             if not div.find('table'):
-                text = clean_text(div.get_text())
-                if text and ('*' in text or '안내' in text or '운행' in text):
-                    notice_parts.append(text)
+                # 각 span/text 요소별로 텍스트 추출
+                text = div.get_text(separator='\n')
+                if text and ('*' in text or '안내' in text or '운행' in text or '-' in text):
+                    notice_texts.append(text)
 
-    if notice_parts:
-        result["notice"] = '\n'.join(notice_parts[:15])
+    # 안내사항 분류
+    if notice_texts:
+        combined = '\n'.join(notice_texts)
+        result["notice"] = format_notice(combined)
 
     return result
 

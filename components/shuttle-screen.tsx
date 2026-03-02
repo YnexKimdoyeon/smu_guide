@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Bus, RefreshCw, Info, MapPin } from 'lucide-react'
+import { Bus, MapPin, Calendar, AlertTriangle } from 'lucide-react'
 import { AppShell } from './app-shell'
 import { shuttleAPI } from '@/lib/api'
 
@@ -15,6 +15,12 @@ interface RouteInfo {
   id: string
   name: string
   dayTypes: DayType[]
+}
+
+interface NoticeData {
+  holidays: string[]
+  bus_info: string[]
+  general: string[]
 }
 
 const ROUTES: RouteInfo[] = [
@@ -36,7 +42,7 @@ export function ShuttleScreen({ onBack }: ShuttleScreenProps) {
   const [selectedRoute, setSelectedRoute] = useState<string>('cheonan_station')
   const [tableHtml, setTableHtml] = useState<string>('')
   const [routeInfo, setRouteInfo] = useState<string>('')
-  const [notice, setNotice] = useState<string>('')
+  const [notice, setNotice] = useState<NoticeData>({ holidays: [], bus_info: [], general: [] })
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -50,6 +56,47 @@ export function ShuttleScreen({ onBack }: ShuttleScreenProps) {
     }
   }, [dayType])
 
+  // 안내사항 문자열을 섹션별로 파싱
+  const parseNotice = (noticeText: string): NoticeData => {
+    const holidays: string[] = []
+    const bus_info: string[] = []
+    const general: string[] = []
+    const seen = new Set<string>()
+
+    if (!noticeText) return { holidays, bus_info, general }
+
+    // *로 시작하는 항목 (공휴일 안내)
+    const holidayMatches = noticeText.match(/\*[^*\n]+/g) || []
+    holidayMatches.forEach(match => {
+      const item = match.trim()
+      if (item && !seen.has(item)) {
+        holidays.push(item)
+        seen.add(item)
+      }
+    })
+
+    // - 로 시작하는 항목
+    const dashMatches = noticeText.match(/-\s*[^-\n]+/g) || []
+    dashMatches.forEach(match => {
+      const item = match.trim()
+      if (item && !seen.has(item)) {
+        // 시내버스 관련
+        if (item.includes('번') && (item.includes('터미널') || item.includes('역') || item.includes('환승'))) {
+          bus_info.push(item)
+        } else {
+          general.push(item)
+        }
+        seen.add(item)
+      }
+    })
+
+    return {
+      holidays: holidays.slice(0, 10),
+      bus_info: bus_info.slice(0, 10),
+      general: general.slice(0, 10)
+    }
+  }
+
   const fetchSchedule = async () => {
     setIsLoading(true)
     setError(null)
@@ -57,7 +104,14 @@ export function ShuttleScreen({ onBack }: ShuttleScreenProps) {
       const data = await shuttleAPI.getSchedule(dayType, selectedRoute)
       setTableHtml(data.table_html || '')
       setRouteInfo(data.route_info || '')
-      setNotice(data.notice || '')
+      // notice가 문자열이면 파싱, 객체면 그대로 사용
+      if (typeof data.notice === 'string') {
+        setNotice(parseNotice(data.notice))
+      } else if (data.notice && typeof data.notice === 'object') {
+        setNotice(data.notice)
+      } else {
+        setNotice({ holidays: [], bus_info: [], general: [] })
+      }
     } catch (err) {
       console.error('셔틀 시간표 로드 실패:', err)
       setError('시간표를 불러오는데 실패했습니다.')
@@ -120,20 +174,8 @@ export function ShuttleScreen({ onBack }: ShuttleScreenProps) {
           </div>
         )}
 
-        {/* 새로고침 버튼 */}
-        <div className="px-4 py-2">
-          <button
-            onClick={fetchSchedule}
-            disabled={isLoading}
-            className="w-full h-9 rounded-lg bg-secondary text-foreground text-xs font-medium hover:bg-muted active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-            새로고침
-          </button>
-        </div>
-
         {/* 시간표 테이블 */}
-        <div className="px-4 pb-4">
+        <div className="px-4 py-4">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
@@ -150,23 +192,71 @@ export function ShuttleScreen({ onBack }: ShuttleScreenProps) {
             </div>
           ) : (
             <div
-              className="shuttle-table-container bg-card rounded-xl border border-border/50 shadow-sm overflow-hidden"
+              className="shuttle-table-container bg-card rounded-xl border border-border/50 shadow-sm overflow-x-auto"
               dangerouslySetInnerHTML={{ __html: tableHtml }}
             />
           )}
         </div>
 
         {/* 안내사항 */}
-        {notice && (
-          <div className="px-4 pb-4">
-            <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-4 border border-amber-200 dark:border-amber-800">
-              <div className="flex items-start gap-2">
-                <Info className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
-                <div className="text-xs text-amber-800 dark:text-amber-200 leading-relaxed whitespace-pre-line">
-                  {notice}
+        {(notice.holidays.length > 0 || notice.bus_info.length > 0 || notice.general.length > 0) && (
+          <div className="px-4 pb-4 space-y-3">
+            {/* 공휴일 운행 안내 */}
+            {notice.holidays.length > 0 && (
+              <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-4 border border-red-200 dark:border-red-800">
+                <div className="flex items-start gap-2">
+                  <Calendar className="w-4 h-4 text-red-500 dark:text-red-400 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-xs font-semibold text-red-700 dark:text-red-300 mb-2">공휴일 운행 안내</p>
+                    <ul className="space-y-1">
+                      {notice.holidays.map((item, idx) => (
+                        <li key={idx} className="text-xs text-red-600 dark:text-red-200 leading-relaxed">
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
+
+            {/* 시내버스 정보 */}
+            {notice.bus_info.length > 0 && (
+              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 border border-blue-200 dark:border-blue-800">
+                <div className="flex items-start gap-2">
+                  <Bus className="w-4 h-4 text-blue-500 dark:text-blue-400 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-xs font-semibold text-blue-700 dark:text-blue-300 mb-2">시내버스 정보</p>
+                    <ul className="space-y-1">
+                      {notice.bus_info.map((item, idx) => (
+                        <li key={idx} className="text-xs text-blue-600 dark:text-blue-200 leading-relaxed">
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 일반 안내사항 */}
+            {notice.general.length > 0 && (
+              <div className="bg-amber-50 dark:bg-amber-900/20 rounded-xl p-4 border border-amber-200 dark:border-amber-800">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-500 dark:text-amber-400 shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-xs font-semibold text-amber-700 dark:text-amber-300 mb-2">안내사항</p>
+                    <ul className="space-y-1">
+                      {notice.general.map((item, idx) => (
+                        <li key={idx} className="text-xs text-amber-600 dark:text-amber-200 leading-relaxed">
+                          {item}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
@@ -183,26 +273,34 @@ export function ShuttleScreen({ onBack }: ShuttleScreenProps) {
 
       {/* 테이블 스타일 */}
       <style jsx global>{`
+        .shuttle-table-container {
+          -webkit-overflow-scrolling: touch;
+        }
         .shuttle-table-container table {
-          width: 100%;
+          min-width: max-content;
           border-collapse: collapse;
           font-size: 11px;
         }
         .shuttle-table-container thead {
           background: hsl(var(--primary) / 0.1);
+          position: sticky;
+          top: 0;
+          z-index: 1;
         }
-        .shuttle-table-container th,
-        .shuttle-table-container td {
-          padding: 6px 4px;
+        .shuttle-table-container th {
+          padding: 8px 10px;
           text-align: center;
           border: 1px solid hsl(var(--border) / 0.3);
           white-space: nowrap;
-        }
-        .shuttle-table-container th {
           font-weight: 600;
           color: hsl(var(--foreground));
+          background: hsl(var(--primary) / 0.1);
         }
         .shuttle-table-container td {
+          padding: 6px 8px;
+          text-align: center;
+          border: 1px solid hsl(var(--border) / 0.3);
+          white-space: nowrap;
           color: hsl(var(--foreground));
         }
         .shuttle-table-container tbody tr:nth-child(even) {
