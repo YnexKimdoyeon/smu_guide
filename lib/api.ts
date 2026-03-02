@@ -622,3 +622,11 @@ export const notificationAPI = {
     })
   },
 }
+
+// 셔틀버스 API
+export const shuttleAPI = {
+  // 시간표 조회
+  getSchedule: async (dayType: string, route: string) => {
+    return fetchAPI(`/shuttle/schedule?day_type=${dayType}&route=${encodeURIComponent(route)}`)
+  },
+}

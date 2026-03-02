@@ -15,6 +15,7 @@ import { SunmoonInfoScreen } from '@/components/sunmoon-info-screen'
 import { CafeteriaScreen } from '@/components/cafeteria-screen'
 import { CommunityScreen } from '@/components/community-screen'
 import { ScholarshipScreen } from '@/components/scholarship-screen'
+import { ShuttleScreen } from '@/components/shuttle-screen'
 import { authAPI, getToken, removeToken } from '@/lib/api'
 import type { User } from '@/lib/store'
 
@@ -156,6 +157,9 @@ export default function Home() {
       )}
       {currentScreen === 'scholarship' && (
         <ScholarshipScreen onBack={handleBack} />
+      )}
+      {currentScreen === 'shuttle' && (
+        <ShuttleScreen onBack={handleBack} />
       )}
     </div>
   )
