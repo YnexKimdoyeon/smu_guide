@@ -1,12 +1,15 @@
 """
 관리자 페이지 API
 """
-from fastapi import APIRouter, HTTPException, Depends
+import hashlib
+import secrets
+import os
+from fastapi import APIRouter, HTTPException, Depends, Header
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Optional
 from pydantic import BaseModel
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from ..core.database import get_db
 from ..models.user import User
@@ -21,7 +24,37 @@ from ..models.block import UserReport, UserBlock
 
 router = APIRouter(prefix="/admin", tags=["관리자"])
 
-ADMIN_PASSWORD = "bang0622@"
+# 환경변수에서 비밀번호 가져오기 (없으면 기본값 사용)
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "bang0622@")
+
+# 활성 세션 저장 (메모리 기반 - 서버 재시작시 초기화)
+# 실제 운영에서는 Redis 등 사용 권장
+active_sessions: dict[str, datetime] = {}
+SESSION_EXPIRY_HOURS = 24
+
+
+def generate_session_token() -> str:
+    """안전한 세션 토큰 생성"""
+    return secrets.token_urlsafe(32)
+
+
+def verify_admin_token(x_admin_token: Optional[str] = Header(None)) -> bool:
+    """관리자 토큰 검증"""
+    if not x_admin_token:
+        raise HTTPException(status_code=401, detail="관리자 인증이 필요합니다.")
+
+    if x_admin_token not in active_sessions:
+        raise HTTPException(status_code=401, detail="유효하지 않은 세션입니다. 다시 로그인해주세요.")
+
+    # 세션 만료 체크
+    session_time = active_sessions[x_admin_token]
+    if datetime.now() - session_time > timedelta(hours=SESSION_EXPIRY_HOURS):
+        del active_sessions[x_admin_token]
+        raise HTTPException(status_code=401, detail="세션이 만료되었습니다. 다시 로그인해주세요.")
+
+    # 세션 갱신
+    active_sessions[x_admin_token] = datetime.now()
+    return True
 
 
 class LoginRequest(BaseModel):
@@ -37,12 +70,25 @@ class LoginResponse(BaseModel):
 async def admin_login(request: LoginRequest):
     """관리자 로그인"""
     if request.password == ADMIN_PASSWORD:
-        return {"success": True, "token": "admin_authenticated"}
+        # 안전한 세션 토큰 생성
+        token = generate_session_token()
+        active_sessions[token] = datetime.now()
+
+        # 오래된 세션 정리 (최대 10개 유지)
+        if len(active_sessions) > 10:
+            oldest = sorted(active_sessions.items(), key=lambda x: x[1])[:len(active_sessions)-10]
+            for old_token, _ in oldest:
+                del active_sessions[old_token]
+
+        return {"success": True, "token": token}
     raise HTTPException(status_code=401, detail="비밀번호가 올바르지 않습니다.")
 
 
 @router.get("/stats")
-async def get_stats(db: Session = Depends(get_db)):
+async def get_stats(
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_admin_token)
+):
     """전체 통계"""
     total_users = db.query(func.count(User.id)).scalar()
     total_schedules = db.query(func.count(Schedule.id)).scalar()
@@ -66,7 +112,10 @@ async def get_stats(db: Session = Depends(get_db)):
 
 
 @router.get("/users")
-async def get_all_users(db: Session = Depends(get_db)):
+async def get_all_users(
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_admin_token)
+):
     """전체 유저 목록"""
     users = db.query(User).order_by(User.created_at.desc()).all()
 
@@ -95,7 +144,11 @@ async def get_all_users(db: Session = Depends(get_db)):
 
 
 @router.get("/users/{user_id}")
-async def get_user_detail(user_id: int, db: Session = Depends(get_db)):
+async def get_user_detail(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_admin_token)
+):
     """유저 상세 정보"""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:

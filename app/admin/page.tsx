@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { adminAPI } from '@/lib/api'
-import { Lock, Users, MessageCircle, Calendar, UserPlus, Building2, Heart, AlertTriangle, ChevronLeft, ChevronRight, Search } from 'lucide-react'
+import { adminAPI, removeAdminToken } from '@/lib/api'
+import { Lock, Users, MessageCircle, Calendar, UserPlus, Building2, Heart, AlertTriangle, ChevronLeft, ChevronRight, Search, LogOut } from 'lucide-react'
 
 interface Stats {
   total_users: number
@@ -134,11 +134,30 @@ export default function AdminPage() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true)
 
   const [stats, setStats] = useState<Stats | null>(null)
   const [users, setUsers] = useState<UserSummary[]>([])
   const [selectedUser, setSelectedUser] = useState<UserDetail | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+
+  // 기존 세션 확인
+  useEffect(() => {
+    const checkExistingSession = async () => {
+      if (adminAPI.isAuthenticated()) {
+        try {
+          await adminAPI.getStats()
+          setIsAuthenticated(true)
+          loadData()
+        } catch {
+          // 세션 만료됨
+          removeAdminToken()
+        }
+      }
+      setIsCheckingAuth(false)
+    }
+    checkExistingSession()
+  }, [])
 
   const handleLogin = async () => {
     setIsLoading(true)
@@ -154,6 +173,14 @@ export default function AdminPage() {
     }
   }
 
+  const handleLogout = () => {
+    adminAPI.logout()
+    setIsAuthenticated(false)
+    setStats(null)
+    setUsers([])
+    setSelectedUser(null)
+  }
+
   const loadData = async () => {
     try {
       const [statsData, usersData] = await Promise.all([
@@ -162,8 +189,12 @@ export default function AdminPage() {
       ])
       setStats(statsData)
       setUsers(usersData)
-    } catch (err) {
+    } catch (err: any) {
       console.error('데이터 로드 실패:', err)
+      // 인증 오류시 로그아웃
+      if (err.message?.includes('인증') || err.message?.includes('세션')) {
+        handleLogout()
+      }
     }
   }
 
@@ -171,9 +202,21 @@ export default function AdminPage() {
     try {
       const detail = await adminAPI.getUserDetail(userId)
       setSelectedUser(detail)
-    } catch (err) {
+    } catch (err: any) {
       console.error('유저 상세 로드 실패:', err)
+      if (err.message?.includes('인증') || err.message?.includes('세션')) {
+        handleLogout()
+      }
     }
+  }
+
+  // 인증 체크 중 로딩 표시
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
   }
 
   const filteredUsers = users.filter(user =>
@@ -503,7 +546,16 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-4 md:p-8">
-      <h1 className="text-3xl font-bold mb-8">관리자 대시보드</h1>
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-3xl font-bold">관리자 대시보드</h1>
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm text-gray-300 hover:text-white transition-colors"
+        >
+          <LogOut className="w-4 h-4" />
+          로그아웃
+        </button>
+      </div>
 
       {/* 통계 */}
       {stats && (

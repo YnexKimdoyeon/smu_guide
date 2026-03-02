@@ -631,28 +631,92 @@ export const shuttleAPI = {
   },
 }
 
+// 관리자 토큰 관리
+const getAdminToken = () => {
+  if (typeof window !== 'undefined') {
+    return sessionStorage.getItem('admin_token')
+  }
+  return null
+}
+
+const setAdminToken = (token: string) => {
+  if (typeof window !== 'undefined') {
+    sessionStorage.setItem('admin_token', token)
+  }
+}
+
+export const removeAdminToken = () => {
+  if (typeof window !== 'undefined') {
+    sessionStorage.removeItem('admin_token')
+  }
+}
+
+// 관리자 API 요청 헬퍼 (토큰 포함)
+async function fetchAdminAPI(endpoint: string, options: RequestInit = {}) {
+  const adminToken = getAdminToken()
+
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    ...options.headers,
+  }
+
+  if (adminToken) {
+    (headers as Record<string, string>)['X-Admin-Token'] = adminToken
+  }
+
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    ...options,
+    headers,
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: '요청 실패' }))
+    // 인증 실패시 토큰 제거
+    if (response.status === 401) {
+      removeAdminToken()
+    }
+    throw new Error(error.detail || '요청 실패')
+  }
+
+  return response.json()
+}
+
 // 관리자 API
 export const adminAPI = {
   // 로그인
   login: async (password: string) => {
-    return fetchAPI('/admin/login', {
+    const result = await fetchAPI('/admin/login', {
       method: 'POST',
       body: JSON.stringify({ password }),
     })
+    if (result.token) {
+      setAdminToken(result.token)
+    }
+    return result
+  },
+
+  // 로그아웃
+  logout: () => {
+    removeAdminToken()
+  },
+
+  // 인증 상태 확인
+  isAuthenticated: () => {
+    return !!getAdminToken()
   },
 
   // 통계 조회
   getStats: async () => {
-    return fetchAPI('/admin/stats')
+    return fetchAdminAPI('/admin/stats')
   },
 
   // 전체 유저 목록
   getUsers: async () => {
-    return fetchAPI('/admin/users')
+    return fetchAdminAPI('/admin/users')
   },
 
   // 유저 상세 정보
   getUserDetail: async (userId: number) => {
-    return fetchAPI(`/admin/users/${userId}`)
+    return fetchAdminAPI(`/admin/users/${userId}`)
   },
 }
