@@ -174,8 +174,18 @@ export function ShuttleScreen({ onBack }: ShuttleScreenProps) {
           </div>
         )}
 
+        {/* 범례 */}
+        <div className="px-4 pt-4 pb-2">
+          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1.5">
+              <div className="w-4 h-4 rounded bg-yellow-200 dark:bg-yellow-600 border border-yellow-300 dark:border-yellow-500" />
+              <span>학생회관 승차 가능</span>
+            </div>
+          </div>
+        </div>
+
         {/* 시간표 테이블 */}
-        <div className="px-4 py-4">
+        <div className="px-4 pb-4">
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
@@ -200,7 +210,7 @@ export function ShuttleScreen({ onBack }: ShuttleScreenProps) {
 
         {/* 안내사항 */}
         {(notice.holidays.length > 0 || notice.bus_info.length > 0 || notice.general.length > 0) && (
-          <div className="px-4 pb-4 space-y-3">
+          <div className="px-4 pb-6 space-y-3">
             {/* 공휴일 운행 안내 */}
             {notice.holidays.length > 0 && (
               <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-4 border border-red-200 dark:border-red-800">
@@ -260,15 +270,6 @@ export function ShuttleScreen({ onBack }: ShuttleScreenProps) {
           </div>
         )}
 
-        {/* 범례 */}
-        <div className="px-4 pb-6">
-          <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-            <div className="flex items-center gap-1.5">
-              <div className="w-4 h-4 rounded bg-yellow-200 dark:bg-yellow-600 border border-yellow-300 dark:border-yellow-500" />
-              <span>학생회관 승차 가능</span>
-            </div>
-          </div>
-        </div>
       </div>
 
       {/* 테이블 스타일 */}
