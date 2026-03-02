@@ -1,19 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Bus, RefreshCw, Info, Clock, MapPin } from 'lucide-react'
+import { Bus, RefreshCw, Info, MapPin } from 'lucide-react'
 import { AppShell } from './app-shell'
 import { shuttleAPI } from '@/lib/api'
-
-interface ShuttleSchedule {
-  seq: number
-  departure_campus?: string
-  departure_station?: string
-  intermediate_stop1?: string
-  intermediate_stop2?: string
-  arrival_campus?: string
-  note?: string
-}
 
 interface ShuttleScreenProps {
   onBack: () => void
@@ -44,7 +34,7 @@ const DAY_LABELS: Record<DayType, string> = {
 export function ShuttleScreen({ onBack }: ShuttleScreenProps) {
   const [dayType, setDayType] = useState<DayType>('weekday')
   const [selectedRoute, setSelectedRoute] = useState<string>('cheonan_station')
-  const [schedule, setSchedule] = useState<ShuttleSchedule[]>([])
+  const [tableHtml, setTableHtml] = useState<string>('')
   const [routeInfo, setRouteInfo] = useState<string>('')
   const [notice, setNotice] = useState<string>('')
   const [isLoading, setIsLoading] = useState(false)
@@ -65,13 +55,13 @@ export function ShuttleScreen({ onBack }: ShuttleScreenProps) {
     setError(null)
     try {
       const data = await shuttleAPI.getSchedule(dayType, selectedRoute)
-      setSchedule(data.schedule || [])
+      setTableHtml(data.table_html || '')
       setRouteInfo(data.route_info || '')
       setNotice(data.notice || '')
     } catch (err) {
       console.error('셔틀 시간표 로드 실패:', err)
       setError('시간표를 불러오는데 실패했습니다.')
-      setSchedule([])
+      setTableHtml('')
     } finally {
       setIsLoading(false)
     }
@@ -80,25 +70,6 @@ export function ShuttleScreen({ onBack }: ShuttleScreenProps) {
   useEffect(() => {
     fetchSchedule()
   }, [dayType, selectedRoute])
-
-  // 컬럼 헤더 결정
-  const getColumnHeaders = () => {
-    // 노선에 따라 컬럼 구성 변경
-    switch (selectedRoute) {
-      case 'cheonan_station':
-        return ['순번', '캠퍼스 출발', '천안역 출발', '중간 경유', '캠퍼스 도착', '비고']
-      case 'asan_ktx':
-        return ['순번', '캠퍼스 출발', '아산역 출발', '중간 경유', '캠퍼스 도착', '비고']
-      case 'cheonan_terminal':
-        return ['순번', '캠퍼스 출발', '터미널 출발', '중간 경유', '캠퍼스 도착', '비고']
-      case 'onyang':
-        return ['순번', '캠퍼스 출발', '온양 출발', '중간 경유', '캠퍼스 도착', '비고']
-      case 'cheonan_campus':
-        return ['순번', '아산캠퍼스 출발', '천안캠퍼스 출발', '아산캠퍼스 도착', '비고']
-      default:
-        return ['순번', '캠퍼스 출발', '역/터미널 출발', '중간 경유', '캠퍼스 도착', '비고']
-    }
-  }
 
   return (
     <AppShell title="셔틀버스" onBack={onBack}>
@@ -172,61 +143,16 @@ export function ShuttleScreen({ onBack }: ShuttleScreenProps) {
               <Bus className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3" />
               <p className="text-muted-foreground text-sm">{error}</p>
             </div>
-          ) : schedule.length === 0 ? (
+          ) : !tableHtml ? (
             <div className="text-center py-12">
               <Bus className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3" />
               <p className="text-muted-foreground text-sm">시간표 정보가 없습니다</p>
             </div>
           ) : (
-            <div className="bg-card rounded-xl border border-border/50 shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="bg-primary/10">
-                      {getColumnHeaders().map((header, idx) => (
-                        <th
-                          key={idx}
-                          className="px-2 py-2.5 text-center font-semibold text-foreground whitespace-nowrap border-b border-border/30"
-                        >
-                          {header}
-                        </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {schedule.map((item, idx) => (
-                      <tr
-                        key={idx}
-                        className={`${idx % 2 === 0 ? 'bg-card' : 'bg-muted/30'} ${
-                          item.note?.includes('학생회관') ? 'bg-yellow-50 dark:bg-yellow-900/20' : ''
-                        }`}
-                      >
-                        <td className="px-2 py-2 text-center text-muted-foreground border-b border-border/20">
-                          {item.seq}
-                        </td>
-                        <td className="px-2 py-2 text-center font-medium text-foreground border-b border-border/20 whitespace-nowrap">
-                          {item.departure_campus || '-'}
-                        </td>
-                        <td className="px-2 py-2 text-center font-medium text-primary border-b border-border/20 whitespace-nowrap">
-                          {item.departure_station || '-'}
-                        </td>
-                        {selectedRoute !== 'cheonan_campus' && (
-                          <td className="px-2 py-2 text-center text-muted-foreground border-b border-border/20 whitespace-nowrap">
-                            {item.intermediate_stop1 || '-'}
-                          </td>
-                        )}
-                        <td className="px-2 py-2 text-center text-foreground border-b border-border/20 whitespace-nowrap">
-                          {item.arrival_campus || '-'}
-                        </td>
-                        <td className="px-2 py-2 text-center text-muted-foreground border-b border-border/20 whitespace-nowrap">
-                          {item.note || ''}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <div
+              className="shuttle-table-container bg-card rounded-xl border border-border/50 shadow-sm overflow-hidden"
+              dangerouslySetInnerHTML={{ __html: tableHtml }}
+            />
           )}
         </div>
 
@@ -248,16 +174,54 @@ export function ShuttleScreen({ onBack }: ShuttleScreenProps) {
         <div className="px-4 pb-6">
           <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
             <div className="flex items-center gap-1.5">
-              <div className="w-4 h-4 rounded bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800" />
+              <div className="w-4 h-4 rounded bg-yellow-200 dark:bg-yellow-600 border border-yellow-300 dark:border-yellow-500" />
               <span>학생회관 승차 가능</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5" />
-              <span>시간은 교통상황에 따라 변동될 수 있습니다</span>
             </div>
           </div>
         </div>
       </div>
+
+      {/* 테이블 스타일 */}
+      <style jsx global>{`
+        .shuttle-table-container table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 11px;
+        }
+        .shuttle-table-container thead {
+          background: hsl(var(--primary) / 0.1);
+        }
+        .shuttle-table-container th,
+        .shuttle-table-container td {
+          padding: 6px 4px;
+          text-align: center;
+          border: 1px solid hsl(var(--border) / 0.3);
+          white-space: nowrap;
+        }
+        .shuttle-table-container th {
+          font-weight: 600;
+          color: hsl(var(--foreground));
+        }
+        .shuttle-table-container td {
+          color: hsl(var(--foreground));
+        }
+        .shuttle-table-container tbody tr:nth-child(even) {
+          background: hsl(var(--muted) / 0.3);
+        }
+        .shuttle-table-container span[style*="background-color: rgb(255, 255, 0)"],
+        .shuttle-table-container span[style*="background-color:rgb(255, 255, 0)"] {
+          background-color: rgb(254 240 138) !important;
+          padding: 1px 4px;
+          border-radius: 4px;
+        }
+        @media (prefers-color-scheme: dark) {
+          .shuttle-table-container span[style*="background-color: rgb(255, 255, 0)"],
+          .shuttle-table-container span[style*="background-color:rgb(255, 255, 0)"] {
+            background-color: rgb(202 138 4) !important;
+            color: white;
+          }
+        }
+      `}</style>
     </AppShell>
   )
 }
