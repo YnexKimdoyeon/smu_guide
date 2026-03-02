@@ -15,7 +15,8 @@ from ..models.chat import ChatRoom, ChatMessage, ChatRoomMember
 from ..models.chat import RandomChatRoom, RandomChatMessage
 from ..models.friend import Friend
 from ..models.commute import CommuteSchedule, CommuteGroup, CommuteGroupMember, CommuteChat
-from ..models.community import Club, ClubApplication, Meeting, MeetingApplication
+from ..models.club import Club, ClubApplication
+from ..models.meeting import Meeting, MeetingApplication
 from ..models.block import UserReport, UserBlock
 
 router = APIRouter(prefix="/admin", tags=["관리자"])
