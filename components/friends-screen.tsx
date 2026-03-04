@@ -21,6 +21,24 @@ interface FreeTimeSlot {
   end_time: string
 }
 
+const days = ['월', '화', '수', '목', '금']
+const timeSlots = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00']
+
+function timeToRow(time: string): number {
+  const [h, m] = time.split(':').map(Number)
+  return (h - 9) * 2 + (m >= 30 ? 1 : 0)
+}
+
+function timeToRowEnd(time: string): number {
+  const [h, m] = time.split(':').map(Number)
+  if (m === 0) return (h - 9) * 2
+  return (h - 9) * 2 + 2
+}
+
+function rowSpan(start: string, end: string): number {
+  return Math.max(timeToRowEnd(end) - timeToRow(start), 1)
+}
+
 interface FriendsScreenProps {
   onBack: () => void
 }
@@ -409,33 +427,73 @@ export function FriendsScreen({ onBack }: FriendsScreenProps) {
               })}
             </div>
 
-            {/* Free Time Cards */}
-            <div className="flex flex-col gap-2.5">
-              {freeTimeResults.length === 0 ? (
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground text-sm">공통 공강 시간이 없습니다</p>
-                </div>
-              ) : (
-                freeTimeResults.map((slot, idx) => (
-                  <div
-                    key={idx}
-                    className="p-4 bg-card rounded-2xl border border-border/50 shadow-sm"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-                        <Calendar className="w-5 h-5 text-primary" />
-                      </div>
-                      <div>
-                        <p className="text-sm font-semibold text-foreground">{slot.day}</p>
-                        <p className="text-xs text-primary font-medium mt-0.5">
-                          {slot.start_time} ~ {slot.end_time}
-                        </p>
-                      </div>
-                    </div>
+            {/* Free Time Timetable Grid */}
+            {freeTimeResults.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground text-sm">공통 공강 시간이 없습니다</p>
+              </div>
+            ) : (
+              <div className="bg-card rounded-2xl shadow-sm border border-border/50 overflow-hidden">
+                {/* Day Headers */}
+                <div className="grid grid-cols-[48px_repeat(5,1fr)] border-b border-border/50">
+                  <div className="h-10 flex items-center justify-center">
+                    <span className="text-xs text-muted-foreground">시간</span>
                   </div>
-                ))
-              )}
-            </div>
+                  {days.map((day) => (
+                    <div key={day} className="h-10 flex items-center justify-center border-l border-border/30">
+                      <span className="text-sm font-semibold text-foreground">{day}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Time Grid */}
+                <div className="grid grid-cols-[48px_repeat(5,1fr)]">
+                  {/* Time Labels */}
+                  <div className="flex flex-col">
+                    {timeSlots.slice(0, 8).map((time) => (
+                      <div key={time} className="h-16 flex items-start justify-center pt-1 border-t border-border/20">
+                        <span className="text-[10px] text-muted-foreground">{time}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Day Columns */}
+                  {days.map((day) => (
+                    <div key={day} className="relative border-l border-border/30">
+                      {/* Grid lines */}
+                      {timeSlots.slice(0, 8).map((time) => (
+                        <div key={time} className="h-16 border-t border-border/20" />
+                      ))}
+
+                      {/* Free Time Slots */}
+                      {freeTimeResults
+                        .filter((slot) => slot.day === day)
+                        .map((slot, idx) => {
+                          const top = timeToRow(slot.start_time) * 32
+                          const height = rowSpan(slot.start_time, slot.end_time) * 32
+                          return (
+                            <div
+                              key={idx}
+                              className="absolute left-0.5 right-0.5 rounded-lg px-1.5 py-1 overflow-hidden bg-green-500/20 border-l-[3px] border-green-500"
+                              style={{
+                                top: `${top}px`,
+                                height: `${height}px`,
+                              }}
+                            >
+                              <p className="text-[10px] font-bold leading-tight text-green-600">
+                                공강
+                              </p>
+                              <p className="text-[8px] text-muted-foreground mt-0.5">
+                                {slot.start_time}~{slot.end_time}
+                              </p>
+                            </div>
+                          )
+                        })}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
