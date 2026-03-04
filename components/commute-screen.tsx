@@ -75,7 +75,7 @@ const TIMES = [
   '21:00', '21:10', '21:20', '21:30', '21:40', '21:50',
   '22:00'
 ]
-const LOCATIONS = ['탕정역', '아산역', '천안역', '천안터미널', '트라팰리스']
+const LOCATIONS = ['탕정역', '아산역', '온양온천역', '천안역', '천안터미널', '트라팰리스']
 
 type TabType = 'schedule' | 'groups'
 type ViewType = 'list' | 'chat'
