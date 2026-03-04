@@ -26,10 +26,10 @@ function timeToRow(time: string): number {
 
 function timeToRowEnd(time: string): number {
   const [h, m] = time.split(':').map(Number)
-  // 끝 시간은 다음 30분 단위로 올림 (12:20 -> 12:30)
+  // 끝 시간은 다음 시간 블록까지 확장 (12:20 -> 13:00)
   if (m === 0) return (h - 9) * 2
-  if (m <= 30) return (h - 9) * 2 + 1
-  return (h - 9) * 2 + 2  // 30분 초과시 다음 시간으로
+  // 분이 있으면 다음 정시까지 확장
+  return (h - 9) * 2 + 2
 }
 
 function rowSpan(start: string, end: string): number {
