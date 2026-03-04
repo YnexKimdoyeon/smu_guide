@@ -27,8 +27,8 @@ function timeToRow(time: string): number {
 function timeToRowEnd(time: string): number {
   const [h, m] = time.split(':').map(Number)
   const baseRow = (h - 9) * 2 + (m >= 30 ? 1 : 0)
-  // 정각/반이 아니면 반칸만 추가
-  if (m > 0 && m !== 30) return baseRow + 0.5
+  // 정각/반이 아니면 0.7칸 추가
+  if (m > 0 && m !== 30) return baseRow + 0.7
   return baseRow
 }
 
