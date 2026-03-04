@@ -95,26 +95,26 @@ export function TimetableScreen({ onBack }: TimetableScreenProps) {
         ) : (
           <>
             {/* Timetable Grid */}
-            <div className="bg-card rounded-2xl shadow-sm border border-border/50 overflow-hidden">
+            <div className="bg-card rounded-xl sm:rounded-2xl shadow-sm border border-border/50 overflow-hidden">
               {/* Day Headers */}
-              <div className="grid grid-cols-[48px_repeat(5,1fr)] border-b border-border/50">
-                <div className="h-10 flex items-center justify-center">
-                  <span className="text-xs text-muted-foreground">시간</span>
+              <div className="grid grid-cols-[36px_repeat(5,1fr)] sm:grid-cols-[48px_repeat(5,1fr)] border-b border-border/50">
+                <div className="h-8 sm:h-10 flex items-center justify-center">
+                  <span className="text-[10px] sm:text-xs text-muted-foreground">시간</span>
                 </div>
                 {days.map((day) => (
-                  <div key={day} className="h-10 flex items-center justify-center border-l border-border/30">
-                    <span className="text-sm font-semibold text-foreground">{day}</span>
+                  <div key={day} className="h-8 sm:h-10 flex items-center justify-center border-l border-border/30">
+                    <span className="text-xs sm:text-sm font-semibold text-foreground">{day}</span>
                   </div>
                 ))}
               </div>
 
               {/* Time Grid */}
-              <div className="grid grid-cols-[48px_repeat(5,1fr)]">
+              <div className="grid grid-cols-[36px_repeat(5,1fr)] sm:grid-cols-[48px_repeat(5,1fr)]">
                 {/* Time Labels */}
                 <div className="flex flex-col">
                   {visibleTimeSlots.map((time) => (
                     <div key={time} className="h-16 flex items-start justify-center pt-1 border-t border-border/20">
-                      <span className="text-[10px] text-muted-foreground">{time}</span>
+                      <span className="text-[8px] sm:text-[10px] text-muted-foreground">{time}</span>
                     </div>
                   ))}
                 </div>

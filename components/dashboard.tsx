@@ -78,19 +78,19 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
   return (
     <div className="fixed inset-0 bg-background flex flex-col">
       {/* Header - 고정 */}
-      <header className="flex-shrink-0 px-5 pt-6 pb-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-full bg-primary/10 flex items-center justify-center">
-            <User className="w-5 h-5 text-primary" />
+      <header className="flex-shrink-0 px-4 sm:px-5 pt-4 sm:pt-6 pb-3 sm:pb-4 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+          <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+            <User className="w-4 h-4 sm:w-5 sm:h-5 text-primary" />
           </div>
-          <div>
-            <p className="text-base font-semibold text-foreground">{user.name}님({user.studentId})</p>
-            <p className="text-xs text-muted-foreground">{user.department}</p>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm sm:text-base font-semibold text-foreground truncate">{user.name}님({user.studentId})</p>
+            <p className="text-[10px] sm:text-xs text-muted-foreground truncate">{user.department}</p>
           </div>
         </div>
         <button
           onClick={onLogout}
-          className="w-10 h-10 rounded-full bg-card flex items-center justify-center shadow-sm border border-border hover:bg-muted transition-colors"
+          className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-card flex items-center justify-center shadow-sm border border-border hover:bg-muted transition-colors shrink-0"
           aria-label="로그아웃"
         >
           <LogOut className="w-4 h-4 text-muted-foreground" />
@@ -100,17 +100,17 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
       {/* 스크롤 영역 */}
       <div className="flex-1 overflow-y-auto">
         {/* Welcome Card */}
-        <div className="px-5 mb-6">
-          <div className="rounded-2xl bg-primary p-5 shadow-lg">
-            <p className="text-primary-foreground/80 text-sm font-medium">{'오늘도 즐거운 캠퍼스 생활!'}</p>
-            <h2 className="text-primary-foreground text-xl font-bold mt-1">{'선문대학교 가이드'}</h2>
-            <p className="text-primary-foreground/70 text-xs mt-2">{'필요한 기능을 선택해주세요'}</p>
+        <div className="px-4 sm:px-5 mb-4 sm:mb-6">
+          <div className="rounded-xl sm:rounded-2xl bg-primary p-4 sm:p-5 shadow-lg">
+            <p className="text-primary-foreground/80 text-xs sm:text-sm font-medium">{'오늘도 즐거운 캠퍼스 생활!'}</p>
+            <h2 className="text-primary-foreground text-lg sm:text-xl font-bold mt-1">{'선문대학교 가이드'}</h2>
+            <p className="text-primary-foreground/70 text-[10px] sm:text-xs mt-1 sm:mt-2">{'필요한 기능을 선택해주세요'}</p>
           </div>
         </div>
 
         {/* App Grid */}
-        <div className="px-5">
-          <div className="grid grid-cols-3 gap-4">
+        <div className="px-4 sm:px-5">
+          <div className="grid grid-cols-3 gap-2 sm:gap-4">
             {apps.map((app) => {
               const Icon = app.icon
               const badgeCount = badges[app.id]
@@ -118,20 +118,20 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
                 <button
                   key={app.id}
                   onClick={() => handleOpenApp(app.id)}
-                  className="flex flex-col items-center gap-2.5 p-4 rounded-2xl bg-card shadow-sm border border-border/50 hover:shadow-md hover:scale-[1.02] active:scale-[0.97] transition-all relative"
+                  className="flex flex-col items-center gap-1.5 sm:gap-2.5 p-2 sm:p-4 rounded-xl sm:rounded-2xl bg-card shadow-sm border border-border/50 hover:shadow-md hover:scale-[1.02] active:scale-[0.97] transition-all relative min-touch-target"
                 >
                   <div
-                    className="w-14 h-14 rounded-2xl flex items-center justify-center relative"
+                    className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center relative shrink-0"
                     style={{ backgroundColor: app.bgColor }}
                   >
-                    <Icon className="w-7 h-7" style={{ color: app.color }} />
+                    <Icon className="w-5 h-5 sm:w-7 sm:h-7" style={{ color: app.color }} />
                     {badgeCount && badgeCount > 0 && (
-                      <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 flex items-center justify-center bg-red-500 text-white text-xs font-bold rounded-full">
+                      <span className="absolute -top-1 -right-1 min-w-4 sm:min-w-5 h-4 sm:h-5 px-1 flex items-center justify-center bg-red-500 text-white text-[10px] sm:text-xs font-bold rounded-full">
                         {badgeCount > 99 ? '99+' : badgeCount}
                       </span>
                     )}
                   </div>
-                  <span className="text-xs font-medium text-foreground text-center leading-tight">
+                  <span className="text-[10px] sm:text-xs font-medium text-foreground text-center leading-tight line-clamp-2 break-keep">
                     {app.label}
                   </span>
                 </button>
