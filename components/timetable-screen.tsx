@@ -20,14 +20,21 @@ const timeSlots = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00'
 
 function timeToRow(time: string): number {
   const [h, m] = time.split(':').map(Number)
-  // 9시 기준으로 분 단위 계산 (30분 = 1 row)
-  const totalMinutesFrom9 = (h - 9) * 60 + m
-  return totalMinutesFrom9 / 30
+  // 9시 기준으로 30분 단위 계산
+  return (h - 9) * 2 + (m >= 30 ? 1 : 0)
+}
+
+function timeToRowEnd(time: string): number {
+  const [h, m] = time.split(':').map(Number)
+  // 끝 시간은 다음 30분 단위로 올림 (12:20 -> 12:30)
+  if (m === 0) return (h - 9) * 2
+  if (m <= 30) return (h - 9) * 2 + 1
+  return (h - 9) * 2 + 2  // 30분 초과시 다음 시간으로
 }
 
 function rowSpan(start: string, end: string): number {
   // 최소 1 row (32px) 보장
-  return Math.max(timeToRow(end) - timeToRow(start), 1)
+  return Math.max(timeToRowEnd(end) - timeToRow(start), 1)
 }
 
 interface TimetableScreenProps {
