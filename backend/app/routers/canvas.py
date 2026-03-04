@@ -432,9 +432,10 @@ async def _fetch_announcements_list(session_data: dict, course_id: int):
         return response
 
 
-def parse_announcement_html(html: str) -> dict:
-    """공지사항 HTML에서 내용 파싱"""
+def parse_announcement_html(html: str, user_id: int) -> dict:
+    """공지사항 HTML에서 내용 파싱 및 이미지 URL 프록시 변환"""
     from bs4 import BeautifulSoup
+    from urllib.parse import quote
 
     soup = BeautifulSoup(html, 'html.parser')
 
@@ -465,14 +466,26 @@ def parse_announcement_html(html: str) -> dict:
 
     # 내용 추출 - enhanced 클래스가 있는 message div 찾기
     content_el = soup.find('div', class_='message user_content enhanced')
-    if content_el:
-        # HTML 태그 유지하면서 내용 추출
-        result['content'] = str(content_el)
-    else:
+    if not content_el:
         # fallback: 일반 message div
         content_el = soup.find('div', class_='message user_content')
-        if content_el:
-            result['content'] = str(content_el)
+
+    if content_el:
+        # 이미지 URL을 프록시 URL로 변환
+        for img in content_el.find_all('img'):
+            src = img.get('src', '')
+            if src:
+                # 상대 경로를 절대 경로로 변환
+                if src.startswith('/'):
+                    src = f"https://canvas.sunmoon.ac.kr{src}"
+                # Canvas URL인 경우 프록시로 변환
+                if 'canvas.sunmoon.ac.kr' in src or src.startswith('/'):
+                    proxy_url = f"/api/canvas/image-proxy?url={quote(src, safe='')}"
+                    img['src'] = proxy_url
+                    # 스타일 추가하여 반응형으로
+                    img['style'] = 'max-width: 100%; height: auto;'
+
+        result['content'] = str(content_el)
 
     return result
 
@@ -544,8 +557,56 @@ async def get_canvas_announcement(
         raise HTTPException(status_code=401, detail="Canvas 세션이 만료되었습니다.")
 
     # HTML 파싱
-    announcement = parse_announcement_html(response.text)
+    announcement = parse_announcement_html(response.text, user_id)
 
     return announcement
 
 
+@router.get("/image-proxy")
+async def proxy_canvas_image(
+    url: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Canvas 이미지 프록시"""
+    from fastapi.responses import Response
+
+    user_id = current_user.id
+
+    if user_id not in canvas_session_cache:
+        raise HTTPException(status_code=401, detail="Canvas 세션이 필요합니다.")
+
+    session_data = canvas_session_cache[user_id]
+    cookies = session_data.get('cookies', {})
+
+    # URL 검증 - Canvas URL만 허용
+    if not ('canvas.sunmoon.ac.kr' in url or url.startswith('/')):
+        raise HTTPException(status_code=400, detail="허용되지 않은 URL입니다.")
+
+    # 상대 경로 처리
+    if url.startswith('/'):
+        url = f"https://canvas.sunmoon.ac.kr{url}"
+
+    try:
+        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+            headers = {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+
+            response = await client.get(url, headers=headers, cookies=cookies)
+
+            if response.status_code != 200:
+                raise HTTPException(status_code=404, detail="이미지를 찾을 수 없습니다.")
+
+            # Content-Type 추출
+            content_type = response.headers.get('content-type', 'image/png')
+
+            return Response(
+                content=response.content,
+                media_type=content_type,
+                headers={
+                    'Cache-Control': 'public, max-age=86400'  # 24시간 캐시
+                }
+            )
+    except Exception as e:
+        print(f"[Canvas] 이미지 프록시 실패: {e}")
+        raise HTTPException(status_code=500, detail="이미지 로드 실패")
