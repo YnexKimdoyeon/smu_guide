@@ -298,7 +298,12 @@ def compare_free_time(
 ):
     """공강 시간 비교"""
     days = ["월", "화", "수", "목", "금"]
-    time_slots = ["09:00", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00"]
+
+    # 30분 단위 시간 슬롯 생성 (09:00 ~ 17:30)
+    time_slots = []
+    for h in range(9, 18):
+        time_slots.append(f"{h:02d}:00")
+        time_slots.append(f"{h:02d}:30")
 
     # 모든 사용자 ID (본인 포함)
     all_user_ids = [current_user.id] + friend_ids
@@ -308,34 +313,38 @@ def compare_free_time(
         Schedule.user_id.in_(all_user_ids)
     ).all()
 
-    # 바쁜 시간 슬롯 계산
+    def time_to_minutes(t: str) -> int:
+        h, m = map(int, t.split(":"))
+        return h * 60 + m
+
+    # 바쁜 시간 슬롯 계산 (30분 단위)
     busy_slots = set()
     for schedule in all_schedules:
         day = schedule.day
-        start_hour = int(schedule.start_time.split(":")[0])
-        end_hour = int(schedule.end_time.split(":")[0])
+        start_min = time_to_minutes(schedule.start_time)
+        end_min = time_to_minutes(schedule.end_time)
 
-        for hour in range(start_hour, end_hour + 1):
-            busy_slots.add((day, f"{hour:02d}:00"))
+        for slot in time_slots:
+            slot_min = time_to_minutes(slot)
+            # 슬롯이 수업 시간과 겹치면 바쁜 시간
+            if start_min <= slot_min < end_min:
+                busy_slots.add((day, slot))
 
-    # 공강 시간 찾기
+    # 공강 시간 찾기 (연속된 슬롯 병합)
     free_times = []
     for day in days:
         free_start = None
-        for slot in time_slots:
+        for i, slot in enumerate(time_slots):
             if (day, slot) not in busy_slots:
                 if free_start is None:
                     free_start = slot
             else:
                 if free_start is not None:
-                    # 이전 슬롯까지가 공강
-                    slot_idx = time_slots.index(slot)
-                    if slot_idx > 0:
-                        free_times.append(FreeTimeSlot(
-                            day=f"{day}요일",
-                            start_time=free_start,
-                            end_time=slot
-                        ))
+                    free_times.append(FreeTimeSlot(
+                        day=f"{day}요일",
+                        start_time=free_start,
+                        end_time=slot
+                    ))
                     free_start = None
 
         # 마지막 연속 공강 처리
