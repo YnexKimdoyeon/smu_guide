@@ -14,6 +14,7 @@ from app.routers import auth, schedule, chat, commute, announcement, phonebook, 
 from app.models.commute import CommuteSchedule, CommuteGroup, CommuteGroupMember
 from app.models.user import User
 from app.services.crawler import sync_run_crawler
+from app.services.push import send_push_sync
 
 # 모든 모델 임포트 (테이블 생성을 위해)
 from app.models import user, schedule as schedule_model, chat as chat_model
@@ -405,6 +406,7 @@ def auto_match_commute():
                     db.refresh(new_group)
                     existing_group = new_group
 
+                new_members = []
                 for member in sub_group:
                     exists = db.query(CommuteGroupMember).filter(
                         CommuteGroupMember.group_id == existing_group.id,
@@ -415,7 +417,19 @@ def auto_match_commute():
                             group_id=existing_group.id,
                             user_id=member["user"].id
                         ))
+                        new_members.append(member["user"])
                 db.commit()
+
+                # 새로 매칭된 멤버들에게 푸시 알림 전송
+                if new_members:
+                    user_ids = [u.student_id for u in new_members]
+                    type_text = "등교" if commute_type == "등교" else "하교"
+                    location_text = f" ({location})" if location else ""
+                    send_push_sync(
+                        user_ids=user_ids,
+                        title=f"🚗 {type_text} 메이트 매칭 완료!",
+                        content=f"{time_slot}{location_text} - 채팅방에서 메이트를 확인하세요!"
+                    )
 
     except Exception as e:
         print(f"자동 매칭 오류: {e}")

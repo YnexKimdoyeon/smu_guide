@@ -31,6 +31,16 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
   const [isWithdrawing, setIsWithdrawing] = useState(false)
   const [badges, setBadges] = useState<Record<string, number>>({})
 
+  // Swing2App 사용자 연동 (푸시 알림용)
+  useEffect(() => {
+    if (user.studentId && user.name) {
+      // Swing2App에 사용자 등록
+      if (typeof window !== 'undefined' && (window as any).doAppLogin) {
+        (window as any).doAppLogin(user.studentId, user.name)
+      }
+    }
+  }, [user.studentId, user.name])
+
   // 알림 배지 조회
   useEffect(() => {
     const fetchBadges = async () => {
@@ -62,13 +72,21 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
     onOpenApp(appId)
   }
 
+  const handleLogout = () => {
+    // Swing2App 로그아웃
+    if (typeof window !== 'undefined' && (window as any).doAppLogout) {
+      (window as any).doAppLogout()
+    }
+    onLogout()
+  }
+
   const handleWithdraw = async () => {
     if (isWithdrawing) return
     setIsWithdrawing(true)
     try {
       await authAPI.withdraw()
       alert('회원탈퇴가 완료되었습니다.')
-      onLogout()
+      handleLogout()
     } catch (error) {
       alert('회원탈퇴 중 오류가 발생했습니다.')
       setIsWithdrawing(false)
@@ -89,7 +107,7 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
           </div>
         </div>
         <button
-          onClick={onLogout}
+          onClick={handleLogout}
           className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-card flex items-center justify-center shadow-sm border border-border hover:bg-muted transition-colors shrink-0"
           aria-label="로그아웃"
         >

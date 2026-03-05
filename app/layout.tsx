@@ -30,6 +30,32 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
+      <head>
+        {/* Swing2App 푸시 알림 SDK */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              // Swing2App 사용자 연동 함수
+              function doAppLogin(userId, userName) {
+                if (window.Android && window.Android.doAppLogin) {
+                  window.Android.doAppLogin(userId, userName);
+                } else if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.doAppLogin) {
+                  window.webkit.messageHandlers.doAppLogin.postMessage({userId: userId, userName: userName});
+                }
+                console.log('[Swing2App] 사용자 연동:', userId, userName);
+              }
+              function doAppLogout() {
+                if (window.Android && window.Android.doAppLogout) {
+                  window.Android.doAppLogout();
+                } else if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.doAppLogout) {
+                  window.webkit.messageHandlers.doAppLogout.postMessage({});
+                }
+                console.log('[Swing2App] 로그아웃');
+              }
+            `,
+          }}
+        />
+      </head>
       <body className={`${notoSansKR.variable} font-sans antialiased`}>
         <AlertProvider>
           {children}
