@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { adminAPI, removeAdminToken } from '@/lib/api'
-import { Lock, Users, MessageCircle, Calendar, UserPlus, Building2, Heart, AlertTriangle, ChevronLeft, ChevronRight, Search, LogOut } from 'lucide-react'
+import { Lock, Users, MessageCircle, Calendar, UserPlus, Building2, Heart, AlertTriangle, ChevronLeft, ChevronRight, Search, LogOut, Bell, Send } from 'lucide-react'
 
 interface Stats {
   total_users: number
@@ -141,6 +141,14 @@ export default function AdminPage() {
   const [selectedUser, setSelectedUser] = useState<UserDetail | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
 
+  // 푸시 알림 관련 상태
+  const [showPushModal, setShowPushModal] = useState(false)
+  const [pushTarget, setPushTarget] = useState<'single' | 'all'>('single')
+  const [pushTargetUser, setPushTargetUser] = useState<UserSummary | null>(null)
+  const [pushTitle, setPushTitle] = useState('')
+  const [pushContent, setPushContent] = useState('')
+  const [isSendingPush, setIsSendingPush] = useState(false)
+
   // 기존 세션 확인
   useEffect(() => {
     const checkExistingSession = async () => {
@@ -207,6 +215,46 @@ export default function AdminPage() {
       if (err.message?.includes('인증') || err.message?.includes('세션')) {
         handleLogout()
       }
+    }
+  }
+
+  const openPushModal = (target: 'single' | 'all', user?: UserSummary) => {
+    setPushTarget(target)
+    setPushTargetUser(user || null)
+    setPushTitle('')
+    setPushContent('')
+    setShowPushModal(true)
+  }
+
+  const handleSendPush = async () => {
+    if (!pushTitle.trim() || !pushContent.trim()) {
+      alert('제목과 내용을 입력하세요.')
+      return
+    }
+
+    setIsSendingPush(true)
+    try {
+      if (pushTarget === 'all') {
+        const result = await adminAPI.sendPushAll(pushTitle, pushContent)
+        if (result.success) {
+          alert('전체 푸시 알림이 전송되었습니다.')
+        } else {
+          alert('푸시 알림 전송 실패')
+        }
+      } else if (pushTargetUser) {
+        const result = await adminAPI.sendPush([pushTargetUser.id], pushTitle, pushContent)
+        if (result.success) {
+          alert(`${pushTargetUser.name}님에게 푸시 알림이 전송되었습니다.`)
+        } else {
+          alert('푸시 알림 전송 실패')
+        }
+      }
+      setShowPushModal(false)
+    } catch (err: any) {
+      console.error('푸시 전송 실패:', err)
+      alert('푸시 알림 전송 중 오류가 발생했습니다.')
+    } finally {
+      setIsSendingPush(false)
     }
   }
 
@@ -546,15 +594,89 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-4 md:p-8">
+      {/* 푸시 알림 모달 */}
+      {showPushModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-md">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
+                <Bell className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-lg">푸시 알림 전송</h3>
+                <p className="text-sm text-gray-400">
+                  {pushTarget === 'all' ? '전체 사용자' : pushTargetUser?.name}
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">제목</label>
+                <input
+                  type="text"
+                  value={pushTitle}
+                  onChange={(e) => setPushTitle(e.target.value)}
+                  placeholder="알림 제목"
+                  className="w-full px-4 py-3 rounded-xl bg-gray-700 text-white placeholder-gray-400 border border-gray-600 focus:border-primary focus:outline-none"
+                />
+              </div>
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">내용</label>
+                <textarea
+                  value={pushContent}
+                  onChange={(e) => setPushContent(e.target.value)}
+                  placeholder="알림 내용"
+                  rows={3}
+                  className="w-full px-4 py-3 rounded-xl bg-gray-700 text-white placeholder-gray-400 border border-gray-600 focus:border-primary focus:outline-none resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowPushModal(false)}
+                className="flex-1 py-3 rounded-xl bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleSendPush}
+                disabled={isSendingPush || !pushTitle.trim() || !pushContent.trim()}
+                className="flex-1 py-3 rounded-xl bg-primary text-white font-semibold hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2"
+              >
+                {isSendingPush ? (
+                  '전송 중...'
+                ) : (
+                  <>
+                    <Send className="w-4 h-4" />
+                    전송
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-3xl font-bold">관리자 대시보드</h1>
-        <button
-          onClick={handleLogout}
-          className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm text-gray-300 hover:text-white transition-colors"
-        >
-          <LogOut className="w-4 h-4" />
-          로그아웃
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => openPushModal('all')}
+            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 rounded-lg text-sm text-white transition-colors"
+          >
+            <Bell className="w-4 h-4" />
+            전체 푸시
+          </button>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm text-gray-300 hover:text-white transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+            로그아웃
+          </button>
+        </div>
       </div>
 
       {/* 통계 */}
@@ -620,12 +742,21 @@ export default function AdminPage() {
                     <span className="px-2 py-1 bg-cyan-500/20 text-cyan-400 rounded text-xs">{user.friend_count}</span>
                   </td>
                   <td className="py-3 px-4">
-                    <button
-                      onClick={() => loadUserDetail(user.id)}
-                      className="flex items-center gap-1 text-primary hover:text-primary/80 transition-colors text-sm"
-                    >
-                      상세 <ChevronRight className="w-4 h-4" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => openPushModal('single', user)}
+                        className="p-1.5 rounded-lg bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 transition-colors"
+                        title="푸시 알림"
+                      >
+                        <Bell className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => loadUserDetail(user.id)}
+                        className="flex items-center gap-1 text-primary hover:text-primary/80 transition-colors text-sm"
+                      >
+                        상세 <ChevronRight className="w-4 h-4" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

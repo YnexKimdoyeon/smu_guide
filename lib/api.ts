@@ -719,4 +719,20 @@ export const adminAPI = {
   getUserDetail: async (userId: number) => {
     return fetchAdminAPI(`/admin/users/${userId}`)
   },
+
+  // 특정 유저들에게 푸시 알림 전송
+  sendPush: async (userIds: number[], title: string, content: string) => {
+    return fetchAdminAPI('/admin/push', {
+      method: 'POST',
+      body: JSON.stringify({ user_ids: userIds, title, content }),
+    })
+  },
+
+  // 전체 유저에게 푸시 알림 전송
+  sendPushAll: async (title: string, content: string) => {
+    return fetchAdminAPI('/admin/push/all', {
+      method: 'POST',
+      body: JSON.stringify({ title, content }),
+    })
+  },
 }

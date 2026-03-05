@@ -21,6 +21,7 @@ from ..models.commute import CommuteSchedule, CommuteGroup, CommuteGroupMember, 
 from ..models.club import Club, ClubApplication
 from ..models.meeting import Meeting, MeetingApplication
 from ..models.block import UserReport, UserBlock
+from ..services.push import send_push_notification
 
 router = APIRouter(prefix="/admin", tags=["관리자"])
 
@@ -349,4 +350,65 @@ async def get_user_detail(
         "reports_sent": reports_sent_data,
         "reports_received": reports_received_data,
         "blocks": blocks_data,
+    }
+
+
+class PushRequest(BaseModel):
+    user_ids: List[int]  # 유저 ID 리스트 (DB ID)
+    title: str
+    content: str
+
+
+class PushAllRequest(BaseModel):
+    title: str
+    content: str
+
+
+@router.post("/push")
+async def send_push_to_users(
+    request: PushRequest,
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_admin_token)
+):
+    """특정 유저들에게 푸시 알림 전송"""
+    # 유저 ID로 학번 조회
+    users = db.query(User).filter(User.id.in_(request.user_ids)).all()
+
+    if not users:
+        raise HTTPException(status_code=404, detail="유저를 찾을 수 없습니다.")
+
+    # 학번 리스트 추출
+    student_ids = [user.student_id for user in users]
+
+    # 푸시 알림 전송
+    import asyncio
+    result = await send_push_notification(
+        user_ids=student_ids,
+        title=request.title,
+        content=request.content
+    )
+
+    return {
+        "success": result.get("success", False),
+        "sent_to": [{"id": u.id, "name": u.name, "student_id": u.student_id} for u in users],
+        "response": result.get("response", {})
+    }
+
+
+@router.post("/push/all")
+async def send_push_to_all_users(
+    request: PushAllRequest,
+    _: bool = Depends(verify_admin_token)
+):
+    """전체 유저에게 푸시 알림 전송"""
+    from ..services.push import send_push_to_all
+
+    result = await send_push_to_all(
+        title=request.title,
+        content=request.content
+    )
+
+    return {
+        "success": result.get("success", False),
+        "response": result.get("response", {})
     }
