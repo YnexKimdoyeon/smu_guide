@@ -85,6 +85,17 @@ export function PhonebookScreen({ onBack }: PhonebookScreenProps) {
     return `tel:041-530-${firstPhone.replace(/[^0-9]/g, '')}`
   }
 
+  const formatPhoneDisplay = (phone: string) => {
+    // 전화번호 표시용 - 041- 접두사 추가
+    return phone.split(',').map(p => {
+      const trimmed = p.trim()
+      if (trimmed.startsWith('530-')) {
+        return `041-${trimmed}`
+      }
+      return `041-530-${trimmed}`
+    }).join(', ')
+  }
+
   if (isLoading) {
     return (
       <AppShell title="전화번호부" onBack={onBack}>
@@ -182,7 +193,7 @@ export function PhonebookScreen({ onBack }: PhonebookScreenProps) {
                             <div className="flex-1 min-w-0">
                               <p className="text-sm font-medium text-foreground truncate">{entry.name}</p>
                               <div className="flex flex-col gap-1 mt-1">
-                                <p className="text-xs text-primary font-medium">{entry.phone}</p>
+                                <p className="text-xs text-primary font-medium">{formatPhoneDisplay(entry.phone)}</p>
                                 {activeTab === 'dept' && entry.location && (
                                   <div className="flex items-center gap-1 text-xs text-muted-foreground">
                                     <MapPin className="w-3 h-3 flex-shrink-0" />
