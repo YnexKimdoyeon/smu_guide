@@ -39,6 +39,7 @@ class ChatMessageResponse(ChatMessageBase):
     room_id: int
     user_id: int
     sender: str
+    nickname_color: Optional[str] = None
     is_mine: bool = False
     created_at: datetime
 

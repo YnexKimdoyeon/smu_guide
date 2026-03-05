@@ -20,6 +20,7 @@ interface ChatMessage {
   id: number
   user_id?: number
   sender: string
+  nickname_color?: string
   message: string
   created_at: string
   is_mine: boolean
@@ -252,6 +253,7 @@ export function ChatScreen({ onBack }: ChatScreenProps) {
           id: data.id,
           user_id: data.user_id,
           sender: data.user_id === userId ? '나' : data.sender,
+          nickname_color: data.nickname_color,
           message: data.message,
           created_at: data.created_at,
           is_mine: data.user_id === userId
@@ -782,7 +784,8 @@ export function ChatScreen({ onBack }: ChatScreenProps) {
                     {!msg.is_mine && (
                       <button
                         onClick={() => msg.user_id && handleUserClick(msg.user_id, msg.sender, msg.id, 'chat')}
-                        className="text-[10px] text-muted-foreground mb-1 ml-1 hover:text-primary hover:underline transition-colors"
+                        className="text-[10px] mb-1 ml-1 hover:underline transition-colors"
+                        style={{ color: msg.nickname_color || 'var(--muted-foreground)' }}
                       >
                         {msg.sender}
                       </button>

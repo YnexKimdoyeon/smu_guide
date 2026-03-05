@@ -1,10 +1,25 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Calendar, MessageCircle, MapPin, Users, LogOut, User, UserX, GraduationCap, Building2, Heart, Award, Bus, X } from 'lucide-react'
+import { Calendar, MessageCircle, MapPin, Users, LogOut, User, UserX, GraduationCap, Building2, Heart, Award, Bus, X, Nut, ShoppingBag } from 'lucide-react'
 import type { User as UserType } from '@/lib/store'
-import { authAPI, notificationAPI, bannerAPI } from '@/lib/api'
+import { authAPI, notificationAPI, bannerAPI, dotoriAPI } from '@/lib/api'
 import { Chatbot } from './chatbot'
+import { DotoriShop } from './dotori-shop'
+
+interface DotoriInfo {
+  point: number
+  nickname_color: string | null
+  title: string | null
+  can_attend_today: boolean
+}
+
+interface DepartmentRanking {
+  rank: number
+  department: string
+  total_dotori: number
+  user_count: number
+}
 
 export type AppId = 'timetable' | 'chat' | 'commute' | 'announcements' | 'phonebook' | 'friends' | 'elearning' | 'academic-calendar' | 'sunmoon-info' | 'cafeteria' | 'community' | 'scholarship' | 'shuttle'
 
@@ -35,6 +50,13 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
   const [mainBanner, setMainBanner] = useState<any>(null)
   const [popup, setPopup] = useState<any>(null)
   const [showPopup, setShowPopup] = useState(false)
+
+  // 도토리 상태
+  const [dotoriInfo, setDotoriInfo] = useState<DotoriInfo | null>(null)
+  const [showShop, setShowShop] = useState(false)
+  const [rankings, setRankings] = useState<DepartmentRanking[]>([])
+  const [myDeptRanking, setMyDeptRanking] = useState<DepartmentRanking | null>(null)
+  const [isAttending, setIsAttending] = useState(false)
 
   // Swing2App 사용자 연동 (푸시 알림용)
   useEffect(() => {
@@ -156,6 +178,61 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
     }
   }
 
+  // 도토리 정보 로드
+  useEffect(() => {
+    const loadDotoriData = async () => {
+      try {
+        const [info, rankingData] = await Promise.all([
+          dotoriAPI.getInfo(),
+          dotoriAPI.getRanking()
+        ])
+        setDotoriInfo(info)
+        setRankings(rankingData.rankings || [])
+        setMyDeptRanking(rankingData.my_department || null)
+      } catch {
+        // 무시
+      }
+    }
+    loadDotoriData()
+  }, [])
+
+  // 출석 체크
+  const handleAttendance = async () => {
+    if (isAttending || !dotoriInfo?.can_attend_today) return
+    setIsAttending(true)
+    try {
+      const result = await dotoriAPI.checkAttendance()
+      if (result.success) {
+        setDotoriInfo(prev => prev ? {
+          ...prev,
+          point: result.total_point,
+          can_attend_today: false
+        } : null)
+        alert(result.message)
+        // 랭킹 갱신
+        const rankingData = await dotoriAPI.getRanking()
+        setRankings(rankingData.rankings || [])
+        setMyDeptRanking(rankingData.my_department || null)
+      } else {
+        alert(result.message)
+      }
+    } catch (error: any) {
+      alert(error.message || '출석 체크 실패')
+    } finally {
+      setIsAttending(false)
+    }
+  }
+
+  // 상점에서 구매 완료 시 도토리 정보 갱신
+  const handlePurchaseComplete = (newPoint: number, itemType: string, itemValue: string) => {
+    setDotoriInfo(prev => prev ? {
+      ...prev,
+      point: newPoint,
+      nickname_color: itemType === 'nickname_color' ? itemValue : prev.nickname_color,
+      title: itemType === 'title' ? itemValue : prev.title
+    } : null)
+  }
+
   return (
     <div className="fixed inset-0 bg-background flex flex-col">
       {/* 팝업 모달 */}
@@ -203,13 +280,44 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
             <p className="text-[10px] sm:text-xs text-muted-foreground truncate">{user.department}</p>
           </div>
         </div>
-        <button
-          onClick={handleLogout}
-          className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-card flex items-center justify-center shadow-sm border border-border hover:bg-muted transition-colors shrink-0"
-          aria-label="로그아웃"
-        >
-          <LogOut className="w-4 h-4 text-muted-foreground" />
-        </button>
+        {/* 오른쪽: 도토리 + 상점 + 로그아웃 */}
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          {/* 도토리 표시 (클릭 시 출석 체크) */}
+          <button
+            onClick={handleAttendance}
+            disabled={isAttending || !dotoriInfo?.can_attend_today}
+            className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-full transition-colors ${
+              dotoriInfo?.can_attend_today
+                ? 'bg-amber-100 hover:bg-amber-200 active:scale-95'
+                : 'bg-amber-50'
+            }`}
+            title={dotoriInfo?.can_attend_today ? '클릭하여 출석 체크' : '오늘 출석 완료'}
+          >
+            <Nut className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-700" />
+            <span className="text-xs sm:text-sm font-semibold text-amber-800">
+              {dotoriInfo?.point ?? 0}
+            </span>
+            {dotoriInfo?.can_attend_today && (
+              <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-red-500 rounded-full animate-pulse" />
+            )}
+          </button>
+          {/* 상점 버튼 */}
+          <button
+            onClick={() => setShowShop(true)}
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-card flex items-center justify-center shadow-sm border border-border hover:bg-muted transition-colors shrink-0"
+            aria-label="상점"
+          >
+            <ShoppingBag className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-muted-foreground" />
+          </button>
+          {/* 로그아웃 */}
+          <button
+            onClick={handleLogout}
+            className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-card flex items-center justify-center shadow-sm border border-border hover:bg-muted transition-colors shrink-0"
+            aria-label="로그아웃"
+          >
+            <LogOut className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-muted-foreground" />
+          </button>
+        </div>
       </header>
 
       {/* 스크롤 영역 */}
@@ -276,6 +384,86 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
           </div>
         </div>
 
+        {/* 학과별 도토리 랭킹 */}
+        {rankings.length >= 3 && (
+          <div className="px-4 sm:px-5 mt-6 sm:mt-8">
+            <h3 className="text-sm font-semibold text-muted-foreground mb-4 flex items-center gap-2">
+              <span>학과별 도토리 랭킹</span>
+              <span className="text-base">🏆</span>
+            </h3>
+
+            {/* 올림픽 단상 */}
+            <div className="flex items-end justify-center gap-2 sm:gap-3 h-44 sm:h-48">
+              {/* 2위 */}
+              <div className="flex flex-col items-center">
+                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gray-200 flex items-center justify-center mb-2 shadow-md">
+                  <span className="text-2xl sm:text-3xl">🥈</span>
+                </div>
+                <div className="bg-gray-200 w-20 sm:w-24 h-16 sm:h-20 rounded-t-lg flex flex-col items-center justify-center px-1">
+                  <span className="text-[10px] sm:text-xs font-bold text-gray-700 truncate w-full text-center">
+                    {rankings[1]?.department?.replace('학과', '').replace('학부', '') || '-'}
+                  </span>
+                  <div className="flex items-center gap-0.5 mt-1">
+                    <Nut className="w-3 h-3 text-amber-600" />
+                    <span className="text-[10px] sm:text-xs text-gray-600 font-medium">
+                      {rankings[1]?.total_dotori || 0}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 1위 (가장 높음) */}
+              <div className="flex flex-col items-center">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-yellow-300 flex items-center justify-center mb-2 shadow-lg ring-2 ring-yellow-400">
+                  <span className="text-3xl sm:text-4xl">🥇</span>
+                </div>
+                <div className="bg-yellow-300 w-24 sm:w-28 h-24 sm:h-28 rounded-t-lg flex flex-col items-center justify-center px-1">
+                  <span className="text-xs sm:text-sm font-bold text-yellow-900 truncate w-full text-center">
+                    {rankings[0]?.department?.replace('학과', '').replace('학부', '') || '-'}
+                  </span>
+                  <div className="flex items-center gap-0.5 mt-1">
+                    <Nut className="w-3.5 h-3.5 text-amber-700" />
+                    <span className="text-xs sm:text-sm text-yellow-800 font-semibold">
+                      {rankings[0]?.total_dotori || 0}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3위 */}
+              <div className="flex flex-col items-center">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-amber-600 flex items-center justify-center mb-2 shadow-md">
+                  <span className="text-xl sm:text-2xl">🥉</span>
+                </div>
+                <div className="bg-amber-600 w-18 sm:w-20 h-12 sm:h-14 rounded-t-lg flex flex-col items-center justify-center px-1">
+                  <span className="text-[10px] sm:text-xs font-bold text-white truncate w-full text-center">
+                    {rankings[2]?.department?.replace('학과', '').replace('학부', '') || '-'}
+                  </span>
+                  <div className="flex items-center gap-0.5 mt-1">
+                    <Nut className="w-3 h-3 text-amber-200" />
+                    <span className="text-[10px] sm:text-xs text-amber-100 font-medium">
+                      {rankings[2]?.total_dotori || 0}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 내 학과 순위 */}
+            {myDeptRanking && (
+              <div className="mt-4 p-3 bg-primary/10 rounded-xl">
+                <p className="text-sm text-center">
+                  우리 학과 <span className="font-bold text-primary">{myDeptRanking.department}</span>는{' '}
+                  <span className="font-bold text-primary">{myDeptRanking.rank}위</span>
+                  <span className="text-muted-foreground ml-1">
+                    ({myDeptRanking.total_dotori}개)
+                  </span>
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Bottom Branding */}
         <div className="py-6 text-center">
           <p className="text-xs text-muted-foreground">{'Sunmoon University Guide v1.0'}</p>
@@ -320,6 +508,16 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
           </div>
         </div>
       )}
+
+      {/* 도토리 상점 모달 */}
+      <DotoriShop
+        isOpen={showShop}
+        onClose={() => setShowShop(false)}
+        dotoriPoint={dotoriInfo?.point || 0}
+        currentColor={dotoriInfo?.nickname_color || null}
+        currentTitle={dotoriInfo?.title || null}
+        onPurchaseComplete={handlePurchaseComplete}
+      />
 
       {/* GPT 챗봇 */}
       <Chatbot />

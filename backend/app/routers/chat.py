@@ -264,16 +264,32 @@ def get_chat_messages(
         query = query.filter(~ChatMessage.user_id.in_(blocked_user_ids))
     messages = query.order_by(ChatMessage.created_at).all()
 
+    # 메시지 작성자들의 정보 조회 (칭호, 색상)
+    user_ids = list(set(msg.user_id for msg in messages))
+    users = db.query(User).filter(User.id.in_(user_ids)).all() if user_ids else []
+    user_map = {u.id: u for u in users}
+
     result = []
     for msg in messages:
         # 익명 번호 생성 (user_id 해시)
         anon_num = (msg.user_id * 7) % 1000
+        msg_user = user_map.get(msg.user_id)
+
+        # 칭호가 있으면 [칭호] 익명123 형태로 표시
+        if msg.user_id == current_user.id:
+            sender_name = "나"
+        elif msg_user and msg_user.title:
+            sender_name = f"[{msg_user.title}] 익명{anon_num}"
+        else:
+            sender_name = f"익명{anon_num}"
+
         result.append(ChatMessageResponse(
             id=msg.id,
             room_id=msg.room_id,
             user_id=msg.user_id,
             message=msg.message,
-            sender=f"익명{anon_num}" if msg.user_id != current_user.id else "나",
+            sender=sender_name,
+            nickname_color=msg_user.nickname_color if msg_user else None,
             is_mine=msg.user_id == current_user.id,
             created_at=msg.created_at
         ))

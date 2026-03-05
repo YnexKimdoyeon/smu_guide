@@ -10,7 +10,7 @@ import random
 
 from app.core.database import engine, Base, SessionLocal
 from app.core.config import settings
-from app.routers import auth, schedule, chat, commute, announcement, phonebook, friend, sunmoon, random_chat, ws_chat, block, gpt, canvas, cafeteria, club, meeting, scholarship, notification, shuttle, admin, banner
+from app.routers import auth, schedule, chat, commute, announcement, phonebook, friend, sunmoon, random_chat, ws_chat, block, gpt, canvas, cafeteria, club, meeting, scholarship, notification, shuttle, admin, banner, dotori
 from app.models.commute import CommuteSchedule, CommuteGroup, CommuteGroupMember
 from app.models.user import User
 from app.services.crawler import sync_run_crawler
@@ -425,6 +425,40 @@ def init_phonebook_data():
 
 init_phonebook_data()
 
+# 도토리 시스템 초기화
+def init_dotori_system():
+    """도토리 시스템 컬럼 추가"""
+    db = SessionLocal()
+    try:
+        # User 테이블에 도토리 관련 컬럼 추가
+        columns = [
+            "ALTER TABLE SMU_USERS ADD COLUMN dotori_point INT DEFAULT 0 COMMENT '도토리 포인트'",
+            "ALTER TABLE SMU_USERS ADD COLUMN last_attendance_date DATE NULL COMMENT '마지막 출석 일자'",
+            "ALTER TABLE SMU_USERS ADD COLUMN nickname_color VARCHAR(7) NULL COMMENT '닉네임 색상'",
+            "ALTER TABLE SMU_USERS ADD COLUMN title VARCHAR(10) NULL COMMENT '칭호'",
+        ]
+        for col_sql in columns:
+            try:
+                db.execute(text(col_sql))
+                db.commit()
+            except Exception:
+                db.rollback()
+
+        # 인덱스 추가
+        try:
+            db.execute(text("CREATE INDEX idx_user_dept_dotori ON SMU_USERS(department, dotori_point)"))
+            db.commit()
+        except Exception:
+            db.rollback()
+
+        print("[Dotori] 시스템 초기화 완료")
+    except Exception as e:
+        print(f"[Dotori] 초기화 오류: {e}")
+    finally:
+        db.close()
+
+init_dotori_system()
+
 # DB 연결 풀 워밍업 및 캐시 프리로딩
 def warmup_database_and_cache():
     """서버 시작 시 DB 연결 풀 워밍업 및 자주 사용되는 데이터 캐시"""
@@ -797,6 +831,7 @@ app.include_router(notification.router, prefix="/api")
 app.include_router(shuttle.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
 app.include_router(banner.router, prefix="/api")
+app.include_router(dotori.router, prefix="/api")
 app.include_router(ws_chat.router)
 
 

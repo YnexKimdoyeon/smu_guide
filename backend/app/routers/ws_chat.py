@@ -101,7 +101,7 @@ async def websocket_chat(
                 if not message_text:
                     continue
 
-                # DB에 메시지 저장 (새 세션)
+                # DB에 메시지 저장 및 사용자 정보 조회 (새 세션)
                 db = SessionLocal()
                 try:
                     new_message = ChatMessage(
@@ -114,17 +114,29 @@ async def websocket_chat(
                     db.refresh(new_message)
                     msg_id = new_message.id
                     msg_time = new_message.created_at.isoformat()
+
+                    # 사용자 정보 조회 (칭호, 닉네임 색상)
+                    user = db.query(User).filter(User.id == user_id).first()
+                    user_title = user.title if user else None
+                    user_color = user.nickname_color if user else None
                 finally:
                     db.close()
 
                 # 익명 번호 생성
                 anon_num = (user_id * 7) % 1000
 
+                # 칭호가 있으면 [칭호] 익명123 형태로 표시
+                if user_title:
+                    sender_name = f"[{user_title}] 익명{anon_num}"
+                else:
+                    sender_name = f"익명{anon_num}"
+
                 # 전체에 브로드캐스트
                 await manager.broadcast_to_room(room_id, {
                     "type": "message",
                     "id": msg_id,
-                    "sender": f"익명{anon_num}",
+                    "sender": sender_name,
+                    "nickname_color": user_color,
                     "message": message_text,
                     "created_at": msg_time,
                     "user_id": user_id

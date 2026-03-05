@@ -754,6 +754,32 @@ export const shuttleAPI = {
   },
 }
 
+// 도토리 API
+export const dotoriAPI = {
+  // 도토리 정보 조회
+  getInfo: async () => {
+    return fetchAPI('/dotori/info')
+  },
+
+  // 출석 체크
+  checkAttendance: async () => {
+    return fetchAPI('/dotori/attendance', { method: 'POST' })
+  },
+
+  // 아이템 구매
+  purchaseItem: async (itemType: 'nickname_color' | 'title', value: string) => {
+    return fetchAPI('/dotori/shop/purchase', {
+      method: 'POST',
+      body: JSON.stringify({ item_type: itemType, value }),
+    })
+  },
+
+  // 학과별 랭킹 조회
+  getRanking: async () => {
+    return fetchAPI('/dotori/ranking')
+  },
+}
+
 // 관리자 토큰 관리
 const getAdminToken = () => {
   if (typeof window !== 'undefined') {
