@@ -31,69 +31,8 @@ export default function RootLayout({
   return (
     <html lang="ko">
       <head>
-        {/* Swing2App 푸시 알림 SDK */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              // Swing2App 사용자 연동 함수
-              function doAppLogin(userId, userName) {
-                console.log('[Swing2App] doAppLogin 호출:', userId, userName);
-                console.log('[Swing2App] Android 존재:', !!window.Android);
-                console.log('[Swing2App] webkit 존재:', !!(window.webkit && window.webkit.messageHandlers));
-
-                var success = false;
-
-                // Android
-                if (window.Android && window.Android.doAppLogin) {
-                  try {
-                    window.Android.doAppLogin(userId, userName);
-                    console.log('[Swing2App] Android doAppLogin 성공');
-                    success = true;
-                  } catch(e) {
-                    console.error('[Swing2App] Android doAppLogin 오류:', e);
-                  }
-                }
-
-                // iOS
-                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.doAppLogin) {
-                  try {
-                    window.webkit.messageHandlers.doAppLogin.postMessage({userId: userId, userName: userName});
-                    console.log('[Swing2App] iOS doAppLogin 성공');
-                    success = true;
-                  } catch(e) {
-                    console.error('[Swing2App] iOS doAppLogin 오류:', e);
-                  }
-                }
-
-                if (!success) {
-                  console.warn('[Swing2App] 네이티브 브릿지가 없습니다. Swing2App 웹뷰에서 실행 중인지 확인하세요.');
-                }
-
-                return success;
-              }
-
-              function doAppLogout() {
-                console.log('[Swing2App] doAppLogout 호출');
-
-                if (window.Android && window.Android.doAppLogout) {
-                  try {
-                    window.Android.doAppLogout();
-                  } catch(e) {
-                    console.error('[Swing2App] Android doAppLogout 오류:', e);
-                  }
-                }
-
-                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.doAppLogout) {
-                  try {
-                    window.webkit.messageHandlers.doAppLogout.postMessage({});
-                  } catch(e) {
-                    console.error('[Swing2App] iOS doAppLogout 오류:', e);
-                  }
-                }
-              }
-            `,
-          }}
-        />
+        {/* Swing2App SDK */}
+        <script src="https://pcdn2.swing2app.co.kr/swing_public_src/v3/2024_11_24_001/js/swing_app_on_web.js" />
       </head>
       <body className={`${notoSansKR.variable} font-sans antialiased`}>
         <AlertProvider>

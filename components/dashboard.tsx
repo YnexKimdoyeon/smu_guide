@@ -36,12 +36,16 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
     if (user.studentId && user.name) {
       // Swing2App에 사용자 등록
       if (typeof window !== 'undefined') {
-        console.log('[Dashboard] Swing2App 사용자 등록 시도:', user.studentId, user.name)
-        if ((window as any).doAppLogin) {
-          const result = (window as any).doAppLogin(user.studentId, user.name)
-          console.log('[Dashboard] doAppLogin 결과:', result)
+        const swingPlugin = (window as any).swingWebViewPlugin
+        if (swingPlugin?.app?.login?.doAppLogin) {
+          try {
+            swingPlugin.app.login.doAppLogin(user.studentId, user.name)
+            console.log('[Swing2App] 사용자 등록 성공:', user.studentId, user.name)
+          } catch (e) {
+            console.error('[Swing2App] 사용자 등록 실패:', e)
+          }
         } else {
-          console.warn('[Dashboard] doAppLogin 함수가 없습니다')
+          console.log('[Swing2App] SDK 미로드 (웹 브라우저에서 실행 중)')
         }
       }
     }
@@ -80,8 +84,16 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
 
   const handleLogout = () => {
     // Swing2App 로그아웃
-    if (typeof window !== 'undefined' && (window as any).doAppLogout) {
-      (window as any).doAppLogout()
+    if (typeof window !== 'undefined') {
+      const swingPlugin = (window as any).swingWebViewPlugin
+      if (swingPlugin?.app?.login?.doAppLogout) {
+        try {
+          swingPlugin.app.login.doAppLogout()
+          console.log('[Swing2App] 로그아웃 성공')
+        } catch (e) {
+          console.error('[Swing2App] 로그아웃 실패:', e)
+        }
+      }
     }
     onLogout()
   }
