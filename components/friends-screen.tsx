@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Search, UserPlus, Check, X, Clock, Calendar, User, Send, Trash2 } from 'lucide-react'
+import { Search, UserPlus, Check, X, Clock, Calendar, User, Send, Trash2, Gift, Nut } from 'lucide-react'
 import { AppShell } from './app-shell'
-import { friendAPI } from '@/lib/api'
+import { friendAPI, dotoriAPI } from '@/lib/api'
 import { useAlert } from './alert-context'
 
 interface Friend {
@@ -41,6 +41,12 @@ export function FriendsScreen({ onBack }: FriendsScreenProps) {
   const [requestMessage, setRequestMessage] = useState('')
   const [requestError, setRequestError] = useState('')
   const [isSending, setIsSending] = useState(false)
+
+  // 도토리 선물 관련
+  const [showGiftModal, setShowGiftModal] = useState(false)
+  const [giftTarget, setGiftTarget] = useState<Friend | null>(null)
+  const [giftAmount, setGiftAmount] = useState('')
+  const [giftLoading, setGiftLoading] = useState(false)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -148,6 +154,36 @@ export function FriendsScreen({ onBack }: FriendsScreenProps) {
       setRequestError((error as Error).message)
     } finally {
       setIsSending(false)
+    }
+  }
+
+  // 도토리 선물하기
+  const handleOpenGiftModal = (friend: Friend) => {
+    setGiftTarget(friend)
+    setGiftAmount('')
+    setShowGiftModal(true)
+  }
+
+  const handleSendGift = async () => {
+    if (!giftTarget || !giftAmount) return
+
+    const amount = parseInt(giftAmount)
+    if (isNaN(amount) || amount < 1) {
+      showToast('1개 이상의 도토리를 입력해주세요', 'error')
+      return
+    }
+
+    setGiftLoading(true)
+    try {
+      const result = await dotoriAPI.sendGift(giftTarget.friend_id, amount)
+      showToast(result.message, 'success')
+      setShowGiftModal(false)
+      setGiftTarget(null)
+      setGiftAmount('')
+    } catch (error) {
+      showToast((error as Error).message, 'error')
+    } finally {
+      setGiftLoading(false)
     }
   }
 
@@ -312,6 +348,13 @@ export function FriendsScreen({ onBack }: FriendsScreenProps) {
                         </div>
                       </button>
                       <button
+                        onClick={() => handleOpenGiftModal(friend)}
+                        className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center hover:bg-amber-200 transition-colors shrink-0"
+                        aria-label="도토리 선물"
+                      >
+                        <Gift className="w-4 h-4 text-amber-600" />
+                      </button>
+                      <button
                         onClick={() => handleDeleteFriend(friend.id)}
                         className="w-8 h-8 rounded-full bg-destructive/10 flex items-center justify-center hover:bg-destructive/20 transition-colors shrink-0"
                         aria-label="친구 삭제"
@@ -435,6 +478,54 @@ export function FriendsScreen({ onBack }: FriendsScreenProps) {
                   </div>
                 ))
               )}
+            </div>
+          </div>
+        )}
+
+        {/* 도토리 선물 모달 */}
+        {showGiftModal && giftTarget && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+            <div className="bg-card rounded-2xl overflow-hidden max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-200">
+              <div className="p-6">
+                <div className="w-16 h-16 mx-auto mb-4 bg-amber-100 rounded-full flex items-center justify-center">
+                  <Nut className="w-8 h-8 text-amber-600" />
+                </div>
+                <h3 className="text-lg font-bold text-foreground text-center mb-2">도토리 선물하기</h3>
+                <p className="text-sm text-muted-foreground text-center mb-4">
+                  <span className="font-semibold text-foreground">{giftTarget.friend_name}</span>님에게<br />
+                  도토리를 선물하세요!
+                </p>
+
+                <div className="flex items-center gap-2 mb-4">
+                  <input
+                    type="number"
+                    min="1"
+                    placeholder="개수 입력"
+                    value={giftAmount}
+                    onChange={(e) => setGiftAmount(e.target.value)}
+                    className="flex-1 h-12 px-4 rounded-xl bg-secondary border border-border/50 text-center text-lg font-semibold text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  />
+                  <span className="text-sm text-muted-foreground">개</span>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowGiftModal(false)}
+                    className="flex-1 py-3 rounded-xl bg-secondary text-foreground font-medium hover:bg-muted transition-colors"
+                    disabled={giftLoading}
+                  >
+                    취소
+                  </button>
+                  <button
+                    onClick={handleSendGift}
+                    disabled={giftLoading || !giftAmount}
+                    className="flex-1 py-3 rounded-xl bg-amber-500 text-white font-semibold hover:bg-amber-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    <Gift className="w-4 h-4" />
+                    {giftLoading ? '전송중...' : '선물하기'}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}

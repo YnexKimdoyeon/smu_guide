@@ -21,6 +21,14 @@ interface DepartmentRanking {
   user_count: number
 }
 
+interface ReceivedGift {
+  id: number
+  sender_id: number
+  sender_name: string
+  amount: number
+  created_at: string
+}
+
 export type AppId = 'timetable' | 'chat' | 'commute' | 'announcements' | 'phonebook' | 'friends' | 'elearning' | 'academic-calendar' | 'sunmoon-info' | 'cafeteria' | 'community' | 'scholarship' | 'shuttle'
 
 interface DashboardProps {
@@ -57,6 +65,11 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
   const [rankings, setRankings] = useState<DepartmentRanking[]>([])
   const [myDeptRanking, setMyDeptRanking] = useState<DepartmentRanking | null>(null)
   const [attendanceMessage, setAttendanceMessage] = useState<string | null>(null)
+
+  // 도토리 선물 팝업 상태
+  const [receivedGifts, setReceivedGifts] = useState<ReceivedGift[]>([])
+  const [showGiftPopup, setShowGiftPopup] = useState(false)
+  const [currentGiftIndex, setCurrentGiftIndex] = useState(0)
 
   // Swing2App 사용자 연동 (푸시 알림용)
   useEffect(() => {
@@ -178,7 +191,7 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
     }
   }
 
-  // 도토리 정보 로드 + 자동 출석 체크
+  // 도토리 정보 로드 + 자동 출석 체크 + 선물 확인
   useEffect(() => {
     const loadDotoriData = async () => {
       try {
@@ -212,6 +225,18 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
         const rankingData = await dotoriAPI.getRanking()
         setRankings(rankingData.rankings || [])
         setMyDeptRanking(rankingData.my_department || null)
+
+        // 읽지 않은 선물 확인
+        try {
+          const giftsData = await dotoriAPI.getUnreadGifts()
+          if (giftsData.gifts && giftsData.gifts.length > 0) {
+            setReceivedGifts(giftsData.gifts)
+            setCurrentGiftIndex(0)
+            setShowGiftPopup(true)
+          }
+        } catch {
+          // 무시
+        }
       } catch {
         // 무시
       }
@@ -227,6 +252,31 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
       nickname_color: itemType === 'nickname_color' ? itemValue : prev.nickname_color,
       title: itemType === 'title' ? itemValue : prev.title
     } : null)
+  }
+
+  // 선물 확인 처리
+  const handleConfirmGift = async () => {
+    const currentGift = receivedGifts[currentGiftIndex]
+    if (!currentGift) return
+
+    try {
+      await dotoriAPI.markGiftAsRead(currentGift.id)
+
+      // 도토리 잔액 갱신 (이미 받았으니 현재 info에서 가져오기)
+      const info = await dotoriAPI.getInfo()
+      setDotoriInfo(prev => prev ? { ...prev, point: info.point } : null)
+    } catch {
+      // 무시
+    }
+
+    // 다음 선물로 이동하거나 팝업 닫기
+    if (currentGiftIndex < receivedGifts.length - 1) {
+      setCurrentGiftIndex(currentGiftIndex + 1)
+    } else {
+      setShowGiftPopup(false)
+      setReceivedGifts([])
+      setCurrentGiftIndex(0)
+    }
   }
 
   return (
@@ -261,6 +311,35 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
                 닫기
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* 도토리 선물 받음 팝업 */}
+      {showGiftPopup && receivedGifts[currentGiftIndex] && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-6">
+          <div className="bg-card rounded-2xl overflow-hidden max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-200">
+            <div className="p-6 text-center">
+              <div className="w-20 h-20 mx-auto mb-4 bg-amber-100 rounded-full flex items-center justify-center">
+                <Nut className="w-10 h-10 text-amber-600" />
+              </div>
+              <h3 className="text-lg font-bold text-foreground mb-2">도토리 선물!</h3>
+              <p className="text-foreground mb-4">
+                <span className="font-semibold text-primary">{receivedGifts[currentGiftIndex].sender_name}</span>님이<br />
+                도토리 <span className="font-bold text-amber-600">{receivedGifts[currentGiftIndex].amount}개</span>를 선물했어요!
+              </p>
+              {receivedGifts.length > 1 && (
+                <p className="text-xs text-muted-foreground mb-4">
+                  {currentGiftIndex + 1} / {receivedGifts.length}
+                </p>
+              )}
+            </div>
+            <button
+              onClick={handleConfirmGift}
+              className="w-full py-4 bg-primary text-primary-foreground font-semibold hover:bg-primary/90 transition-colors"
+            >
+              확인
+            </button>
           </div>
         </div>
       )}

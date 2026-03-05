@@ -778,6 +778,24 @@ export const dotoriAPI = {
   getRanking: async () => {
     return fetchAPI('/dotori/ranking')
   },
+
+  // 친구에게 도토리 선물
+  sendGift: async (receiverId: number, amount: number) => {
+    return fetchAPI('/dotori/gift', {
+      method: 'POST',
+      body: JSON.stringify({ receiver_id: receiverId, amount }),
+    })
+  },
+
+  // 읽지 않은 선물 조회
+  getUnreadGifts: async () => {
+    return fetchAPI('/dotori/gifts/unread')
+  },
+
+  // 선물 읽음 처리
+  markGiftAsRead: async (giftId: number) => {
+    return fetchAPI(`/dotori/gifts/${giftId}/read`, { method: 'POST' })
+  },
 }
 
 // 관리자 토큰 관리

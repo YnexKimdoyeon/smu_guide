@@ -21,7 +21,7 @@ from app.models import user, schedule as schedule_model, chat as chat_model
 from app.models import commute as commute_model, announcement as announcement_model
 from app.models import phonebook as phonebook_model, friend as friend_model
 from app.models import block as block_model, club as club_model, meeting as meeting_model
-from app.models import notification as notification_model
+from app.models import notification as notification_model, dotori as dotori_model
 
 # 데이터베이스 테이블 생성
 Base.metadata.create_all(bind=engine)
@@ -451,6 +451,44 @@ def init_dotori_system():
         except Exception:
             db.rollback()
 
+        # 랭킹 캐시 테이블 생성
+        try:
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS SMU_DEPARTMENT_RANKINGS (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    cache_date DATE NOT NULL,
+                    `rank` INT NOT NULL,
+                    department VARCHAR(100) NOT NULL,
+                    total_dotori INT DEFAULT 0,
+                    user_count INT DEFAULT 0,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_ranking_date (cache_date)
+                )
+            """))
+            db.commit()
+        except Exception:
+            db.rollback()
+
+        # 도토리 선물 테이블 생성
+        try:
+            db.execute(text("""
+                CREATE TABLE IF NOT EXISTS SMU_DOTORI_GIFTS (
+                    id INT AUTO_INCREMENT PRIMARY KEY,
+                    sender_id INT NOT NULL,
+                    receiver_id INT NOT NULL,
+                    amount INT NOT NULL,
+                    is_read BOOLEAN DEFAULT FALSE,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    INDEX idx_gift_receiver (receiver_id),
+                    INDEX idx_gift_unread (receiver_id, is_read),
+                    FOREIGN KEY (sender_id) REFERENCES SMU_USERS(id),
+                    FOREIGN KEY (receiver_id) REFERENCES SMU_USERS(id)
+                )
+            """))
+            db.commit()
+        except Exception:
+            db.rollback()
+
         print("[Dotori] 시스템 초기화 완료")
     except Exception as e:
         print(f"[Dotori] 초기화 오류: {e}")
@@ -458,6 +496,58 @@ def init_dotori_system():
         db.close()
 
 init_dotori_system()
+
+
+# 도토리 랭킹 캐시 갱신 (매일 자정)
+def refresh_dotori_ranking_cache():
+    """랭킹 캐시 갱신"""
+    from app.models.dotori import DepartmentRankingCache
+    from sqlalchemy import func, desc
+
+    db = SessionLocal()
+    try:
+        today = date.today()
+
+        # 오늘 캐시가 이미 있는지 확인
+        existing = db.query(DepartmentRankingCache).filter(
+            DepartmentRankingCache.cache_date == today
+        ).first()
+
+        if existing:
+            return
+
+        # 이전 캐시 삭제
+        db.query(DepartmentRankingCache).delete()
+
+        # 학과별 도토리 합계 조회
+        rankings = db.query(
+            User.department,
+            func.sum(User.dotori_point).label('total_dotori'),
+            func.count(User.id).label('user_count')
+        ).group_by(
+            User.department
+        ).order_by(
+            desc('total_dotori')
+        ).all()
+
+        # 캐시 테이블에 저장
+        for idx, (dept, total, count) in enumerate(rankings, 1):
+            cache_entry = DepartmentRankingCache(
+                cache_date=today,
+                rank=idx,
+                department=dept,
+                total_dotori=total or 0,
+                user_count=count
+            )
+            db.add(cache_entry)
+
+        db.commit()
+        print(f"[Dotori] 랭킹 캐시 갱신 완료: {len(rankings)}개 학과")
+    except Exception as e:
+        print(f"[Dotori] 랭킹 캐시 갱신 오류: {e}")
+        db.rollback()
+    finally:
+        db.close()
 
 # DB 연결 풀 워밍업 및 캐시 프리로딩
 def warmup_database_and_cache():
@@ -701,6 +791,8 @@ scheduler.add_job(auto_match_commute, 'interval', minutes=1)
 scheduler.add_job(sync_run_crawler, 'interval', hours=1)
 # 매일 자정에 오래된 등하교 채팅방 삭제
 scheduler.add_job(cleanup_old_commute_groups, 'cron', hour=0, minute=0)
+# 매일 자정에 도토리 랭킹 캐시 갱신 (KST 자정 = UTC 15:00)
+scheduler.add_job(refresh_dotori_ranking_cache, 'cron', hour=0, minute=5)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
