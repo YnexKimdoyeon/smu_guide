@@ -499,6 +499,17 @@ async def parse_announcement_html(html: str, cookies: dict) -> dict:
                         print(f"[Canvas] 이미지 변환 실패: {src}, {e}")
                         # 실패 시 원본 URL 유지
 
+        # 링크를 새 탭에서 열리도록 처리
+        for link in content_el.find_all('a'):
+            href = link.get('href', '')
+            if href and not href.startswith('#'):
+                # 상대 경로를 절대 경로로 변환
+                if href.startswith('/'):
+                    link['href'] = f"https://canvas.sunmoon.ac.kr{href}"
+                # 새 탭에서 열리도록 설정
+                link['target'] = '_blank'
+                link['rel'] = 'noopener noreferrer'
+
         result['content'] = str(content_el)
 
     return result
