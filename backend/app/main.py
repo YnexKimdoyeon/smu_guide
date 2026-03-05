@@ -709,6 +709,40 @@ app = FastAPI(
 )
 
 
+# 보안 헤더 미들웨어
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next):
+    response = await call_next(request)
+
+    # HSTS (Strict-Transport-Security) - HTTPS 강제
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+
+    # CSP (Content-Security-Policy) - XSS 방어
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; "
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data: https:; "
+        "font-src 'self' data:; "
+        "connect-src 'self' wss: https:; "
+        "frame-ancestors 'self';"
+    )
+
+    # 추가 보안 헤더 (기존 헤더가 없는 경우에만 추가)
+    if "X-Content-Type-Options" not in response.headers:
+        response.headers["X-Content-Type-Options"] = "nosniff"
+    if "X-Frame-Options" not in response.headers:
+        response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    if "X-XSS-Protection" not in response.headers:
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+    if "Referrer-Policy" not in response.headers:
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    if "Permissions-Policy" not in response.headers:
+        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+
+    return response
+
+
 # Rate Limiting 미들웨어
 @app.middleware("http")
 async def rate_limit_middleware(request: Request, call_next):

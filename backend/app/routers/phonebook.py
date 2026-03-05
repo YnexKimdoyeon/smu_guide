@@ -1,4 +1,6 @@
 from typing import List, Optional
+import re
+import unicodedata
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
@@ -11,6 +13,46 @@ from app.models.phonebook import PhoneEntry
 from app.schemas.phonebook import PhoneEntryCreate, PhoneEntryUpdate, PhoneEntryResponse
 
 router = APIRouter(prefix="/phonebook", tags=["전화번호부"])
+
+
+def sanitize_search_query(query: str) -> str:
+    """
+    검색어 정규화 및 위험 문자 필터링
+    - 이모지 제거
+    - 유니코드 방향 제어 문자 제거
+    - 일반 텍스트만 허용 (한글, 영문, 숫자, 공백, 하이픈)
+    """
+    if not query:
+        return ""
+
+    # 유니코드 정규화 (NFC)
+    query = unicodedata.normalize("NFC", query)
+
+    # 제어 문자 제거 (유니코드 카테고리 C*)
+    query = "".join(
+        char for char in query
+        if not unicodedata.category(char).startswith("C")
+    )
+
+    # 이모지 및 특수 심볼 제거 (유니코드 카테고리 So, Sk)
+    query = "".join(
+        char for char in query
+        if unicodedata.category(char) not in ("So", "Sk")
+    )
+
+    # 유니코드 방향 제어 문자 제거 (RTL, LTR 등)
+    bidi_chars = re.compile(r"[\u200e\u200f\u202a-\u202e\u2066-\u2069]")
+    query = bidi_chars.sub("", query)
+
+    # 허용 문자만 유지: 한글, 영문, 숫자, 공백, 하이픈, 점
+    allowed_pattern = re.compile(r"[^\uAC00-\uD7A3\u1100-\u11FF\u3130-\u318Fa-zA-Z0-9\s\-\.]")
+    query = allowed_pattern.sub("", query)
+
+    # 연속 공백 제거 및 앞뒤 공백 제거
+    query = re.sub(r"\s+", " ", query).strip()
+
+    # 최대 길이 제한 (100자)
+    return query[:100]
 
 CACHE_KEY = "phonebook"
 CACHE_EXPIRE = 3600  # 1시간
@@ -33,11 +75,14 @@ def get_phone_entries(
         query = query.filter(PhoneEntry.department == department)
 
     if search:
-        query = query.filter(
-            (PhoneEntry.department.contains(search)) |
-            (PhoneEntry.name.contains(search)) |
-            (PhoneEntry.phone.contains(search))
-        )
+        # 검색어 정규화 (이모지/특수 유니코드 필터링)
+        sanitized_search = sanitize_search_query(search)
+        if sanitized_search:
+            query = query.filter(
+                (PhoneEntry.department.contains(sanitized_search)) |
+                (PhoneEntry.name.contains(sanitized_search)) |
+                (PhoneEntry.phone.contains(sanitized_search))
+            )
 
     entries = query.order_by(PhoneEntry.department, PhoneEntry.name).all()
     return entries
