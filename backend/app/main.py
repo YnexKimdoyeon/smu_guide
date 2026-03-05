@@ -437,12 +437,57 @@ def auto_match_commute():
     finally:
         db.close()
 
+def cleanup_old_commute_groups():
+    """하루 지난 등하교 채팅방 자동 삭제"""
+    from app.models.commute import CommuteChat
+
+    db = SessionLocal()
+    try:
+        yesterday = date.today() - timedelta(days=1)
+
+        # 어제 이전의 그룹 조회
+        old_groups = db.query(CommuteGroup).filter(
+            CommuteGroup.match_date < date.today()
+        ).all()
+
+        if not old_groups:
+            return
+
+        old_group_ids = [g.id for g in old_groups]
+
+        # 채팅 메시지 삭제
+        db.query(CommuteChat).filter(
+            CommuteChat.group_id.in_(old_group_ids)
+        ).delete(synchronize_session=False)
+
+        # 그룹 멤버 삭제
+        db.query(CommuteGroupMember).filter(
+            CommuteGroupMember.group_id.in_(old_group_ids)
+        ).delete(synchronize_session=False)
+
+        # 그룹 삭제
+        db.query(CommuteGroup).filter(
+            CommuteGroup.id.in_(old_group_ids)
+        ).delete(synchronize_session=False)
+
+        db.commit()
+        print(f"[Cleanup] {len(old_group_ids)}개의 오래된 등하교 그룹 삭제 완료")
+
+    except Exception as e:
+        print(f"[Cleanup] 등하교 그룹 삭제 오류: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
 # APScheduler 설정
 from apscheduler.schedulers.background import BackgroundScheduler
 
 scheduler = BackgroundScheduler()
 scheduler.add_job(auto_match_commute, 'interval', minutes=1)
 scheduler.add_job(sync_run_crawler, 'interval', hours=1)
+# 매일 자정에 오래된 등하교 채팅방 삭제
+scheduler.add_job(cleanup_old_commute_groups, 'cron', hour=0, minute=0)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

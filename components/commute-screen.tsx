@@ -353,6 +353,14 @@ export function CommuteScreen({ onBack }: CommuteScreenProps) {
           </div>
         </div>
 
+        {/* 자동 삭제 안내 */}
+        <div className="px-4 py-2 bg-orange-500/10 border-b border-orange-500/20">
+          <div className="flex items-center gap-2 text-orange-600 dark:text-orange-400">
+            <Info className="w-4 h-4 flex-shrink-0" />
+            <p className="text-xs">이 채팅방은 다음 날 자정에 자동으로 삭제됩니다.</p>
+          </div>
+        </div>
+
         {/* 메시지 */}
         <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
           {messages.length === 0 ? (
