@@ -218,6 +218,20 @@ export const commuteAPI = {
       body: JSON.stringify({ group_id: groupId, message }),
     })
   },
+
+  // 출석 확인 (꼭 갈거에요!)
+  confirmAttendance: async (groupId: number) => {
+    return fetchAPI(`/commute/groups/${groupId}/confirm`, {
+      method: 'POST',
+    })
+  },
+
+  // 출석 확인 취소
+  cancelAttendance: async (groupId: number) => {
+    return fetchAPI(`/commute/groups/${groupId}/confirm`, {
+      method: 'DELETE',
+    })
+  },
 }
 
 // 공지사항 API

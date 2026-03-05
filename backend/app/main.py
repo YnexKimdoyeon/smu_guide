@@ -118,6 +118,24 @@ def init_commute_system():
 
 init_commute_system()
 
+# 등하교 그룹 멤버 is_confirmed 컬럼 추가
+def init_commute_confirmed():
+    db = SessionLocal()
+    try:
+        try:
+            db.execute(text("""
+                ALTER TABLE SMU_COMMUTE_GROUP_MEMBERS
+                ADD COLUMN is_confirmed INT DEFAULT 0 COMMENT '참석 확인 여부: 0=미확인, 1=확인'
+            """))
+            db.commit()
+            print("is_confirmed 컬럼 추가 완료")
+        except Exception:
+            db.rollback()
+    finally:
+        db.close()
+
+init_commute_confirmed()
+
 # 공지사항 테이블 컬럼 업데이트
 def init_announcement_system():
     db = SessionLocal()

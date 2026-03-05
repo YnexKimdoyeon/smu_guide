@@ -34,6 +34,7 @@ class CommuteGroupMemberInfo(BaseModel):
     user_id: int
     name: str
     department: str
+    is_confirmed: int = 0  # 참석 확인 여부: 0=미확인, 1=확인
 
 
 class CommuteGroupResponse(BaseModel):

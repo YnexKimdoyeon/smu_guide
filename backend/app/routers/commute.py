@@ -117,7 +117,8 @@ def get_today_groups(
             CommuteGroupMemberInfo(
                 user_id=member.user_id,
                 name=user.name,
-                department=user.department
+                department=user.department,
+                is_confirmed=member.is_confirmed or 0
             )
             for member, user in members
         ]
@@ -365,7 +366,8 @@ def get_group_detail(
         CommuteGroupMemberInfo(
             user_id=member.user_id,
             name=user.name,
-            department=user.department
+            department=user.department,
+            is_confirmed=member.is_confirmed or 0
         )
         for member, user in members
     ]
@@ -380,3 +382,51 @@ def get_group_detail(
         members=member_list,
         member_count=len(member_list)
     )
+
+
+@router.post("/groups/{group_id}/confirm")
+def confirm_attendance(
+    group_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """출석 확인 (꼭 갈거에요!)"""
+    member = db.query(CommuteGroupMember).filter(
+        CommuteGroupMember.group_id == group_id,
+        CommuteGroupMember.user_id == current_user.id
+    ).first()
+
+    if not member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="이 그룹의 멤버가 아닙니다"
+        )
+
+    member.is_confirmed = 1
+    db.commit()
+
+    return {"message": "출석 확인 완료", "is_confirmed": 1}
+
+
+@router.delete("/groups/{group_id}/confirm")
+def cancel_attendance(
+    group_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """출석 확인 취소"""
+    member = db.query(CommuteGroupMember).filter(
+        CommuteGroupMember.group_id == group_id,
+        CommuteGroupMember.user_id == current_user.id
+    ).first()
+
+    if not member:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="이 그룹의 멤버가 아닙니다"
+        )
+
+    member.is_confirmed = 0
+    db.commit()
+
+    return {"message": "출석 확인 취소", "is_confirmed": 0}

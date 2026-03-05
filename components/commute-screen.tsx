@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Clock, Users, ArrowLeft, Send, Check, RefreshCw, Info, Ban, Flag, AlertTriangle } from 'lucide-react'
+import { Clock, Users, ArrowLeft, Send, Check, RefreshCw, Info, Ban, Flag, AlertTriangle, CheckCircle2 } from 'lucide-react'
 import { AppShell } from './app-shell'
 import { commuteAPI, blockAPI } from '@/lib/api'
 
@@ -15,6 +15,7 @@ interface GroupMember {
   user_id: number
   name: string
   department: string
+  is_confirmed: number
 }
 
 interface CommuteGroup {
@@ -107,6 +108,9 @@ export function CommuteScreen({ onBack }: CommuteScreenProps) {
   const [reportDetail, setReportDetail] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
   const [blockedUserIds, setBlockedUserIds] = useState<number[]>([])
+
+  // 출석 확인 상태
+  const [isConfirming, setIsConfirming] = useState(false)
 
   // 차단 목록 로드
   useEffect(() => {
@@ -295,6 +299,47 @@ export function CommuteScreen({ onBack }: CommuteScreenProps) {
     }
   }
 
+  // 현재 사용자 ID 가져오기
+  const getCurrentUserId = () => {
+    if (typeof window !== 'undefined') {
+      const userId = localStorage.getItem('user_id')
+      return userId ? parseInt(userId) : null
+    }
+    return null
+  }
+
+  // 현재 사용자의 확인 상태
+  const getMyConfirmStatus = () => {
+    if (!selectedGroup) return false
+    const userId = getCurrentUserId()
+    if (!userId) return false
+    const member = selectedGroup.members.find(m => m.user_id === userId)
+    return member?.is_confirmed === 1
+  }
+
+  // 출석 확인 토글
+  const handleToggleConfirm = async () => {
+    if (!selectedGroup || isConfirming) return
+    setIsConfirming(true)
+    try {
+      const isConfirmed = getMyConfirmStatus()
+      if (isConfirmed) {
+        await commuteAPI.cancelAttendance(selectedGroup.id)
+      } else {
+        await commuteAPI.confirmAttendance(selectedGroup.id)
+      }
+      // 그룹 정보 새로고침
+      const updatedGroup = await commuteAPI.getGroup(selectedGroup.id)
+      setSelectedGroup(updatedGroup)
+      // groups 리스트도 업데이트
+      setGroups(prev => prev.map(g => g.id === updatedGroup.id ? updatedGroup : g))
+    } catch (error) {
+      console.error('출석 확인 실패:', error)
+    } finally {
+      setIsConfirming(false)
+    }
+  }
+
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedGroup || isSending) return
 
@@ -345,12 +390,44 @@ export function CommuteScreen({ onBack }: CommuteScreenProps) {
             {selectedGroup.members.map((member) => (
               <span
                 key={member.user_id}
-                className="px-2 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium"
+                className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${
+                  member.is_confirmed === 1
+                    ? 'bg-green-500/20 text-green-600'
+                    : 'bg-primary/10 text-primary'
+                }`}
               >
+                {member.is_confirmed === 1 && <CheckCircle2 className="w-3 h-3" />}
                 {member.name}
               </span>
             ))}
           </div>
+        </div>
+
+        {/* 출석 확인 버튼 */}
+        <div className="px-4 py-3 bg-card border-b border-border/30">
+          <button
+            onClick={handleToggleConfirm}
+            disabled={isConfirming}
+            className={`w-full py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50 ${
+              getMyConfirmStatus()
+                ? 'bg-green-500 text-white hover:bg-green-600'
+                : 'bg-primary text-primary-foreground hover:bg-primary/90'
+            }`}
+          >
+            {isConfirming ? (
+              '처리 중...'
+            ) : getMyConfirmStatus() ? (
+              <>
+                <CheckCircle2 className="w-4 h-4" />
+                확인 완료! (취소하려면 클릭)
+              </>
+            ) : (
+              <>
+                <Check className="w-4 h-4" />
+                저는 꼭 갈거에요!
+              </>
+            )}
+          </button>
         </div>
 
         {/* 자동 삭제 안내 */}
@@ -728,8 +805,11 @@ export function CommuteScreen({ onBack }: CommuteScreenProps) {
                           {group.members.slice(0, 3).map((member) => (
                             <span
                               key={member.user_id}
-                              className="text-xs text-muted-foreground"
+                              className={`text-xs flex items-center gap-0.5 ${
+                                member.is_confirmed === 1 ? 'text-green-600 font-medium' : 'text-muted-foreground'
+                              }`}
                             >
+                              {member.is_confirmed === 1 && <CheckCircle2 className="w-3 h-3" />}
                               {member.name}
                             </span>
                           ))}
@@ -739,6 +819,14 @@ export function CommuteScreen({ onBack }: CommuteScreenProps) {
                             </span>
                           )}
                         </div>
+                        {/* 확인 현황 */}
+                        {group.members.some(m => m.is_confirmed === 1) && (
+                          <div className="mt-1">
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-600 font-medium">
+                              {group.members.filter(m => m.is_confirmed === 1).length}/{group.members.length}명 확인
+                            </span>
+                          </div>
+                        )}
                       </div>
                       <div className="flex items-center gap-1 text-primary">
                         <Users className="w-4 h-4" />
