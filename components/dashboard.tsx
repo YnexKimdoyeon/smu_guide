@@ -35,8 +35,14 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
   useEffect(() => {
     if (user.studentId && user.name) {
       // Swing2App에 사용자 등록
-      if (typeof window !== 'undefined' && (window as any).doAppLogin) {
-        (window as any).doAppLogin(user.studentId, user.name)
+      if (typeof window !== 'undefined') {
+        console.log('[Dashboard] Swing2App 사용자 등록 시도:', user.studentId, user.name)
+        if ((window as any).doAppLogin) {
+          const result = (window as any).doAppLogin(user.studentId, user.name)
+          console.log('[Dashboard] doAppLogin 결과:', result)
+        } else {
+          console.warn('[Dashboard] doAppLogin 함수가 없습니다')
+        }
       }
     }
   }, [user.studentId, user.name])
