@@ -168,14 +168,15 @@ async def get_mileage(
             'Content-Type': 'application/x-www-form-urlencoded',
         }
 
-        # 최대 2회 재시도
-        for attempt in range(2):
+        # 최대 3회 재시도
+        last_mileage_data = None
+        for attempt in range(3):
             try:
                 # 1. folio 로그인
                 login_success = await login_folio(client, credentials['login_id'], credentials['password'])
                 if not login_success:
                     print(f"[Folio] 로그인 실패 (시도 {attempt + 1}): user_id={current_user.id}")
-                    if attempt == 1:
+                    if attempt == 2:
                         raise HTTPException(status_code=401, detail="포트폴리오 로그인 실패. 다시 로그인해주세요.")
                     continue
 
@@ -189,21 +190,34 @@ async def get_mileage(
 
                 if response.status_code != 200:
                     print(f"[Folio] 마일리지 조회 실패: status={response.status_code}")
-                    if attempt == 1:
+                    if attempt == 2:
                         raise HTTPException(status_code=500, detail="마일리지 정보를 가져올 수 없습니다.")
                     continue
 
                 mileage_data = parse_mileage_html(response.text)
+                last_mileage_data = mileage_data
 
-                # 파싱 결과 검증 - 모든 값이 0이면 파싱 실패 가능성
-                if mileage_data.total == 0 and mileage_data.s_total == 0 and mileage_data.t_total == 0:
-                    # 로그인 페이지로 리다이렉트 되었을 수 있음
+                # 파싱 결과 검증 - 모든 값이 0이면 재시도
+                all_zero = (mileage_data.total == 0 and mileage_data.s_total == 0 and
+                           mileage_data.t_total == 0 and mileage_data.a_total == 0 and
+                           mileage_data.r_total == 0)
+
+                if all_zero:
+                    # 로그인 페이지로 리다이렉트 되었는지 확인
                     if '로그인' in response.text or 'login' in response.text.lower():
                         print(f"[Folio] 세션 만료 감지 (시도 {attempt + 1})")
-                        if attempt == 1:
+                        if attempt == 2:
                             raise HTTPException(status_code=401, detail="세션이 만료되었습니다. 다시 로그인해주세요.")
                         continue
 
+                    # 모든 값이 0인 경우 한 번 더 시도 (서버 일시적 오류 가능성)
+                    if attempt < 2:
+                        print(f"[Folio] 모든 값이 0, 재시도 (시도 {attempt + 1})")
+                        import asyncio
+                        await asyncio.sleep(0.5)  # 잠시 대기 후 재시도
+                        continue
+
+                # 값이 있거나, 마지막 시도에서 0이면 반환
                 return {
                     "year": year,
                     "student_id": current_user.student_id,
@@ -214,11 +228,19 @@ async def get_mileage(
                 raise
             except httpx.RequestError as e:
                 print(f"[Folio] 요청 오류 (시도 {attempt + 1}): {e}")
-                if attempt == 1:
+                if attempt == 2:
                     raise HTTPException(status_code=500, detail=f"요청 실패: {str(e)}")
             except Exception as e:
                 print(f"[Folio] 예외 발생 (시도 {attempt + 1}): {e}")
-                if attempt == 1:
+                if attempt == 2:
                     raise HTTPException(status_code=500, detail="마일리지 조회 중 오류가 발생했습니다.")
+
+        # 마지막으로 받은 데이터 반환 (모두 0이어도)
+        if last_mileage_data:
+            return {
+                "year": year,
+                "student_id": current_user.student_id,
+                "data": last_mileage_data.model_dump()
+            }
 
         raise HTTPException(status_code=500, detail="마일리지 조회 실패")
