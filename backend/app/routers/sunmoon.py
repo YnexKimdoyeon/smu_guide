@@ -4,12 +4,14 @@
 import re
 import httpx
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import datetime, timedelta
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from app.core.database import get_db
 from app.core.security import get_password_hash, create_access_token
+from app.core.config import settings
 from app.models.user import User
 from app.models.schedule import Schedule
 from app.routers.gpt import get_gpt_session, session_cache as gpt_session_cache
@@ -17,6 +19,66 @@ from app.routers.canvas import login_canvas, canvas_session_cache
 from app.routers.scholarship import folio_credentials_cache
 
 router = APIRouter(prefix="/sunmoon", tags=["선문대 연동"])
+
+
+def check_login_blocked(ip: str) -> bool:
+    """로그인 차단 여부 확인"""
+    from app.main import login_attempt_store
+
+    if ip not in login_attempt_store:
+        return False
+
+    data = login_attempt_store[ip]
+    blocked_until = data.get('blocked_until')
+
+    if blocked_until and datetime.now() < blocked_until:
+        return True
+
+    # 차단 시간 지남 - 초기화
+    if blocked_until and datetime.now() >= blocked_until:
+        del login_attempt_store[ip]
+        return False
+
+    return False
+
+
+def get_remaining_block_time(ip: str) -> int:
+    """남은 차단 시간 (초) 반환"""
+    from app.main import login_attempt_store
+
+    if ip not in login_attempt_store:
+        return 0
+
+    data = login_attempt_store[ip]
+    blocked_until = data.get('blocked_until')
+
+    if blocked_until and datetime.now() < blocked_until:
+        return int((blocked_until - datetime.now()).total_seconds())
+
+    return 0
+
+
+def record_login_attempt(ip: str, success: bool):
+    """로그인 시도 기록"""
+    from app.main import login_attempt_store
+
+    if success:
+        # 성공 시 시도 횟수 초기화
+        if ip in login_attempt_store:
+            del login_attempt_store[ip]
+        return
+
+    # 실패 시 시도 횟수 증가
+    if ip not in login_attempt_store:
+        login_attempt_store[ip] = {'attempts': 0, 'blocked_until': None}
+
+    login_attempt_store[ip]['attempts'] += 1
+    attempts = login_attempt_store[ip]['attempts']
+
+    # 5회 실패 시 차단
+    if attempts >= settings.LOGIN_MAX_ATTEMPTS:
+        login_attempt_store[ip]['blocked_until'] = datetime.now() + timedelta(minutes=settings.LOGIN_BLOCK_MINUTES)
+        print(f"[Login] IP {ip} 차단됨: {settings.LOGIN_BLOCK_MINUTES}분간")
 
 SWS_BASE_URL = "https://sws.sunmoon.ac.kr"
 SWS_LOGIN_URL = f"{SWS_BASE_URL}/Login.aspx"
@@ -255,10 +317,22 @@ def merge_consecutive_classes(schedules: list) -> list:
 
 @router.post("/login", response_model=SunmoonLoginResponse)
 async def login_with_sunmoon(
+    request: Request,
     login_data: SunmoonLoginRequest,
     db: Session = Depends(get_db)
 ):
     """선문대 종합정보시스템으로 로그인"""
+    # IP 추출
+    client_ip = request.client.host if request.client else "unknown"
+
+    # 차단 여부 확인
+    if check_login_blocked(client_ip):
+        remaining = get_remaining_block_time(client_ip)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"로그인 시도 횟수 초과. {remaining}초 후에 다시 시도해주세요."
+        )
+
     try:
         async with httpx.AsyncClient(
             follow_redirects=True,
@@ -304,6 +378,7 @@ async def login_with_sunmoon(
                 main_response = await client.get(SWS_MAIN_URL, headers=get_headers(SWS_LOGIN_URL))
 
                 if "btnLogin" in main_response.text or "Login.aspx" in str(main_response.url):
+                    record_login_attempt(client_ip, success=False)
                     raise HTTPException(
                         status_code=status.HTTP_401_UNAUTHORIZED,
                         detail="선문대 로그인 실패: 학번 또는 비밀번호를 확인하세요"
@@ -323,6 +398,7 @@ async def login_with_sunmoon(
                     user_info = parse_user_info(myinfo_html)
 
             if not user_info["name"]:
+                record_login_attempt(client_ip, success=False)
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
                     detail="아이디 또는 비밀번호가 올바르지 않습니다"
@@ -443,6 +519,9 @@ async def login_with_sunmoon(
                 'password': login_data.password
             }
             print(f"[Folio] 자격증명 저장 완료: user_id={user.id}")
+
+            # 로그인 성공 - 시도 횟수 초기화
+            record_login_attempt(client_ip, success=True)
 
             return SunmoonLoginResponse(
                 access_token=access_token,

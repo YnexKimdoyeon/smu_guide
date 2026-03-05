@@ -18,7 +18,11 @@ class Settings(BaseSettings):
     # JWT - 환경변수에서 로드
     SECRET_KEY: str = ""
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24시간
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 365  # 365일 (웹뷰 앱용 - 로그아웃 전까지 유지)
+
+    # Login Rate Limiting
+    LOGIN_MAX_ATTEMPTS: int = 5  # 최대 로그인 시도 횟수
+    LOGIN_BLOCK_MINUTES: int = 5  # 차단 시간 (분)
 
     # CORS - 허용할 도메인 목록
     CORS_ORIGINS: str = "*"  # 콤마로 구분: "https://example.com,https://app.example.com"

@@ -1,6 +1,6 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -11,6 +11,62 @@ from app.models.user import User
 from app.schemas.user import UserCreate, UserLogin, UserResponse, Token
 
 router = APIRouter(prefix="/auth", tags=["인증"])
+
+
+def check_login_blocked(ip: str) -> bool:
+    """로그인 차단 여부 확인"""
+    from app.main import login_attempt_store
+
+    if ip not in login_attempt_store:
+        return False
+
+    data = login_attempt_store[ip]
+    blocked_until = data.get('blocked_until')
+
+    if blocked_until and datetime.now() < blocked_until:
+        return True
+
+    if blocked_until and datetime.now() >= blocked_until:
+        del login_attempt_store[ip]
+        return False
+
+    return False
+
+
+def get_remaining_block_time(ip: str) -> int:
+    """남은 차단 시간 (초) 반환"""
+    from app.main import login_attempt_store
+
+    if ip not in login_attempt_store:
+        return 0
+
+    data = login_attempt_store[ip]
+    blocked_until = data.get('blocked_until')
+
+    if blocked_until and datetime.now() < blocked_until:
+        return int((blocked_until - datetime.now()).total_seconds())
+
+    return 0
+
+
+def record_login_attempt(ip: str, success: bool):
+    """로그인 시도 기록"""
+    from app.main import login_attempt_store
+
+    if success:
+        if ip in login_attempt_store:
+            del login_attempt_store[ip]
+        return
+
+    if ip not in login_attempt_store:
+        login_attempt_store[ip] = {'attempts': 0, 'blocked_until': None}
+
+    login_attempt_store[ip]['attempts'] += 1
+    attempts = login_attempt_store[ip]['attempts']
+
+    if attempts >= settings.LOGIN_MAX_ATTEMPTS:
+        login_attempt_store[ip]['blocked_until'] = datetime.now() + timedelta(minutes=settings.LOGIN_BLOCK_MINUTES)
+        print(f"[Login] IP {ip} 차단됨: {settings.LOGIN_BLOCK_MINUTES}분간")
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -42,15 +98,30 @@ def register(user_data: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=Token)
-def login(login_data: UserLogin, db: Session = Depends(get_db)):
+def login(request: Request, login_data: UserLogin, db: Session = Depends(get_db)):
     """로그인"""
+    # IP 추출
+    client_ip = request.client.host if request.client else "unknown"
+
+    # 차단 여부 확인
+    if check_login_blocked(client_ip):
+        remaining = get_remaining_block_time(client_ip)
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"로그인 시도 횟수 초과. {remaining}초 후에 다시 시도해주세요."
+        )
+
     user = db.query(User).filter(User.student_id == login_data.student_id).first()
 
     if not user or not verify_password(login_data.password, user.password):
+        record_login_attempt(client_ip, success=False)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="학번 또는 비밀번호가 올바르지 않습니다"
         )
+
+    # 로그인 성공
+    record_login_attempt(client_ip, success=True)
 
     access_token = create_access_token(
         data={"sub": str(user.id)},

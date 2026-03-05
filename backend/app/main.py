@@ -525,6 +525,9 @@ async def lifespan(app: FastAPI):
 # Rate Limiting 저장소
 rate_limit_store = defaultdict(list)
 
+# 로그인 시도 저장소 (IP -> {attempts: int, blocked_until: datetime})
+login_attempt_store: dict = {}
+
 
 def cleanup_old_requests(client_ip: str, window: int = 60):
     """오래된 요청 기록 정리"""

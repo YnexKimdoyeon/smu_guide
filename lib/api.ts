@@ -19,7 +19,32 @@ export const removeToken = () => {
   if (typeof window !== 'undefined') {
     localStorage.removeItem('access_token')
     localStorage.removeItem('user_id')
+    localStorage.removeItem('_cred')
   }
+}
+
+// 자격증명 저장/조회 (세션 자동 갱신용)
+const saveCredentials = (studentId: string, password: string) => {
+  if (typeof window !== 'undefined') {
+    // Base64 인코딩 (간단한 난독화)
+    const cred = btoa(JSON.stringify({ s: studentId, p: password }))
+    localStorage.setItem('_cred', cred)
+  }
+}
+
+const getCredentials = (): { studentId: string, password: string } | null => {
+  if (typeof window !== 'undefined') {
+    const cred = localStorage.getItem('_cred')
+    if (cred) {
+      try {
+        const decoded = JSON.parse(atob(cred))
+        return { studentId: decoded.s, password: decoded.p }
+      } catch {
+        return null
+      }
+    }
+  }
+  return null
 }
 
 // API 요청 헬퍼
@@ -65,6 +90,8 @@ export const authAPI = {
     if (data.user_id) {
       localStorage.setItem('user_id', String(data.user_id))
     }
+    // 자격증명 저장 (세션 자동 갱신용)
+    saveCredentials(studentId, password)
     return data
   },
 
@@ -360,6 +387,32 @@ export const randomChatAPI = {
   },
 }
 
+// GPT 세션 자동 재인증 래퍼
+async function fetchGptWithAutoRetry(endpoint: string, options: RequestInit = {}) {
+  try {
+    return await fetchAPI(endpoint, options)
+  } catch (error: any) {
+    // 401 에러이고 저장된 자격증명이 있으면 재인증 시도
+    if (error.message?.includes('세션') || error.message?.includes('401') || error.message?.includes('로그인')) {
+      const creds = getCredentials()
+      if (creds) {
+        try {
+          // GPT 세션 재초기화
+          await fetchAPI('/gpt/init', {
+            method: 'POST',
+            body: JSON.stringify({ password: creds.password }),
+          })
+          // 원래 요청 재시도
+          return await fetchAPI(endpoint, options)
+        } catch (retryError) {
+          throw error
+        }
+      }
+    }
+    throw error
+  }
+}
+
 // GPT 챗봇 API
 export const gptAPI = {
   // 세션 초기화
@@ -375,9 +428,9 @@ export const gptAPI = {
     return fetchAPI('/gpt/status')
   },
 
-  // GPT와 대화
+  // GPT와 대화 (자동 재인증)
   chat: async (messages: { role: string; content: string }[], rid: number = 1) => {
-    return fetchAPI('/gpt/chat', {
+    return fetchGptWithAutoRetry('/gpt/chat', {
       method: 'POST',
       body: JSON.stringify({ messages, rid }),
     })
@@ -426,6 +479,33 @@ export const blockAPI = {
   },
 }
 
+// Canvas 세션 자동 재인증 래퍼
+async function fetchCanvasWithAutoRetry(endpoint: string, options: RequestInit = {}) {
+  try {
+    return await fetchAPI(endpoint, options)
+  } catch (error: any) {
+    // 401 에러이고 저장된 자격증명이 있으면 재인증 시도
+    if (error.message?.includes('세션') || error.message?.includes('401') || error.message?.includes('로그인')) {
+      const creds = getCredentials()
+      if (creds) {
+        try {
+          // Canvas 세션 재초기화
+          await fetchAPI('/canvas/init', {
+            method: 'POST',
+            body: JSON.stringify({ username: creds.studentId, password: creds.password }),
+          })
+          // 원래 요청 재시도
+          return await fetchAPI(endpoint, options)
+        } catch (retryError) {
+          // 재인증 실패 - 원래 에러 던지기
+          throw error
+        }
+      }
+    }
+    throw error
+  }
+}
+
 // Canvas LMS API
 export const canvasAPI = {
   // 세션 초기화
@@ -441,24 +521,24 @@ export const canvasAPI = {
     return fetchAPI('/canvas/status')
   },
 
-  // 할 일 목록 조회
+  // 할 일 목록 조회 (자동 재인증)
   getTodos: async () => {
-    return fetchAPI('/canvas/todos')
+    return fetchCanvasWithAutoRetry('/canvas/todos')
   },
 
-  // 수강 과목 목록 조회
+  // 수강 과목 목록 조회 (자동 재인증)
   getCourses: async () => {
-    return fetchAPI('/canvas/courses')
+    return fetchCanvasWithAutoRetry('/canvas/courses')
   },
 
-  // 과목별 공지사항 목록 조회
+  // 과목별 공지사항 목록 조회 (자동 재인증)
   getCourseAnnouncements: async (courseId: number) => {
-    return fetchAPI(`/canvas/courses/${courseId}/announcements`)
+    return fetchCanvasWithAutoRetry(`/canvas/courses/${courseId}/announcements`)
   },
 
-  // 공지사항 상세 조회
+  // 공지사항 상세 조회 (자동 재인증)
   getAnnouncement: async (courseId: number, topicId: number) => {
-    return fetchAPI(`/canvas/announcements/${courseId}/${topicId}`)
+    return fetchCanvasWithAutoRetry(`/canvas/announcements/${courseId}/${topicId}`)
   },
 }
 
@@ -532,11 +612,37 @@ export const clubAPI = {
   },
 }
 
+// 장학금 세션 자동 재인증 래퍼
+async function fetchScholarshipWithAutoRetry(endpoint: string) {
+  try {
+    return await fetchAPI(endpoint)
+  } catch (error: any) {
+    // 401 에러이고 저장된 자격증명이 있으면 재로그인 시도
+    if (error.message?.includes('세션') || error.message?.includes('401') || error.message?.includes('로그인')) {
+      const creds = getCredentials()
+      if (creds) {
+        try {
+          // 메인 로그인으로 세션 갱신 (folio 자격증명 재저장)
+          await fetchAPI('/sunmoon/login', {
+            method: 'POST',
+            body: JSON.stringify({ student_id: creds.studentId, password: creds.password }),
+          })
+          // 원래 요청 재시도
+          return await fetchAPI(endpoint)
+        } catch (retryError) {
+          throw error
+        }
+      }
+    }
+    throw error
+  }
+}
+
 // 장학금 API
 export const scholarshipAPI = {
-  // 마일리지 조회
+  // 마일리지 조회 (자동 재인증)
   getMileage: async (year: number) => {
-    return fetchAPI(`/scholarship/mileage?year=${year}`)
+    return fetchScholarshipWithAutoRetry(`/scholarship/mileage?year=${year}`)
   },
 }
 
