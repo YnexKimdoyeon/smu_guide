@@ -735,4 +735,53 @@ export const adminAPI = {
       body: JSON.stringify({ title, content }),
     })
   },
+
+  // 메인 배너 조회
+  getMainBanner: async () => {
+    return fetchAdminAPI('/banner/main')
+  },
+
+  // 메인 배너 업데이트
+  updateMainBanner: async (imageData: string | null, linkUrl: string | null, isActive: boolean) => {
+    return fetchAdminAPI('/banner/main', {
+      method: 'POST',
+      body: JSON.stringify({ image_data: imageData, link_url: linkUrl, is_active: isActive }),
+    })
+  },
+
+  // 메인 배너 삭제
+  deleteMainBanner: async () => {
+    return fetchAdminAPI('/banner/main', { method: 'DELETE' })
+  },
+
+  // 팝업 조회
+  getPopup: async () => {
+    return fetchAdminAPI('/banner/popup')
+  },
+
+  // 팝업 업데이트
+  updatePopup: async (imageData: string | null, linkUrl: string | null, isActive: boolean, title: string) => {
+    return fetchAdminAPI('/banner/popup', {
+      method: 'POST',
+      body: JSON.stringify({ image_data: imageData, link_url: linkUrl, is_active: isActive, title }),
+    })
+  },
+
+  // 팝업 삭제
+  deletePopup: async () => {
+    return fetchAdminAPI('/banner/popup', { method: 'DELETE' })
+  },
+}
+
+// 배너 API (공개)
+export const bannerAPI = {
+  // 메인 배너 조회
+  getMainBanner: async () => {
+    return fetchAPI('/banner/main')
+  },
+
+  // 팝업 조회
+  getPopup: async () => {
+    return fetchAPI('/banner/popup')
+  },
 }

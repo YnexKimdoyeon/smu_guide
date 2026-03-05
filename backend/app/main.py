@@ -10,7 +10,7 @@ import random
 
 from app.core.database import engine, Base, SessionLocal
 from app.core.config import settings
-from app.routers import auth, schedule, chat, commute, announcement, phonebook, friend, sunmoon, random_chat, ws_chat, block, gpt, canvas, cafeteria, club, meeting, scholarship, notification, shuttle, admin
+from app.routers import auth, schedule, chat, commute, announcement, phonebook, friend, sunmoon, random_chat, ws_chat, block, gpt, canvas, cafeteria, club, meeting, scholarship, notification, shuttle, admin, banner
 from app.models.commute import CommuteSchedule, CommuteGroup, CommuteGroupMember
 from app.models.user import User
 from app.services.crawler import sync_run_crawler
@@ -580,6 +580,7 @@ app.include_router(scholarship.router, prefix="/api")
 app.include_router(notification.router, prefix="/api")
 app.include_router(shuttle.router, prefix="/api")
 app.include_router(admin.router, prefix="/api")
+app.include_router(banner.router, prefix="/api")
 app.include_router(ws_chat.router)
 
 

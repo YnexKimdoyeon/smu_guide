@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Calendar, MessageCircle, MapPin, Users, LogOut, User, UserX, GraduationCap, Building2, Heart, Award, Bus } from 'lucide-react'
+import { Calendar, MessageCircle, MapPin, Users, LogOut, User, UserX, GraduationCap, Building2, Heart, Award, Bus, X } from 'lucide-react'
 import type { User as UserType } from '@/lib/store'
-import { authAPI, notificationAPI } from '@/lib/api'
+import { authAPI, notificationAPI, bannerAPI } from '@/lib/api'
 import { Chatbot } from './chatbot'
 
 export type AppId = 'timetable' | 'chat' | 'commute' | 'announcements' | 'phonebook' | 'friends' | 'elearning' | 'academic-calendar' | 'sunmoon-info' | 'cafeteria' | 'community' | 'scholarship' | 'shuttle'
@@ -31,6 +31,11 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
   const [isWithdrawing, setIsWithdrawing] = useState(false)
   const [badges, setBadges] = useState<Record<string, number>>({})
 
+  // 배너/팝업 상태
+  const [mainBanner, setMainBanner] = useState<any>(null)
+  const [popup, setPopup] = useState<any>(null)
+  const [showPopup, setShowPopup] = useState(false)
+
   // Swing2App 사용자 연동 (푸시 알림용)
   useEffect(() => {
     if (user.studentId && user.name) {
@@ -50,6 +55,46 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
       }
     }
   }, [user.studentId, user.name])
+
+  // 배너/팝업 로드
+  useEffect(() => {
+    const loadBanners = async () => {
+      try {
+        const [bannerData, popupData] = await Promise.all([
+          bannerAPI.getMainBanner(),
+          bannerAPI.getPopup()
+        ])
+
+        if (bannerData.is_active) {
+          setMainBanner(bannerData)
+        }
+
+        if (popupData.is_active) {
+          // 오늘 하루 안보기 체크
+          const dismissedDate = localStorage.getItem('popup_dismissed_date')
+          const today = new Date().toDateString()
+
+          if (dismissedDate !== today) {
+            setPopup(popupData)
+            setShowPopup(true)
+          }
+        }
+      } catch (err) {
+        // 무시
+      }
+    }
+    loadBanners()
+  }, [])
+
+  const handleDismissPopupToday = () => {
+    const today = new Date().toDateString()
+    localStorage.setItem('popup_dismissed_date', today)
+    setShowPopup(false)
+  }
+
+  const handleClosePopup = () => {
+    setShowPopup(false)
+  }
 
   // 알림 배지 조회
   useEffect(() => {
@@ -113,6 +158,40 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
 
   return (
     <div className="fixed inset-0 bg-background flex flex-col">
+      {/* 팝업 모달 */}
+      {showPopup && popup && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-6">
+          <div className="bg-card rounded-2xl overflow-hidden max-w-sm w-full shadow-2xl">
+            {popup.title && (
+              <div className="px-4 py-3 border-b border-border/50">
+                <h3 className="font-semibold text-foreground text-center">{popup.title}</h3>
+              </div>
+            )}
+            {popup.link_url ? (
+              <a href={popup.link_url} target="_blank" rel="noopener noreferrer">
+                <img src={popup.image_url} alt="팝업" className="w-full object-contain" />
+              </a>
+            ) : (
+              <img src={popup.image_url} alt="팝업" className="w-full object-contain" />
+            )}
+            <div className="flex border-t border-border/50">
+              <button
+                onClick={handleDismissPopupToday}
+                className="flex-1 py-3 text-sm text-muted-foreground hover:bg-muted transition-colors border-r border-border/50"
+              >
+                오늘 하루 안보기
+              </button>
+              <button
+                onClick={handleClosePopup}
+                className="flex-1 py-3 text-sm font-medium text-primary hover:bg-muted transition-colors"
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header - 고정 */}
       <header className="flex-shrink-0 px-4 sm:px-5 pt-4 sm:pt-6 pb-3 sm:pb-4 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
@@ -143,6 +222,27 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
             <p className="text-primary-foreground/70 text-[10px] sm:text-xs mt-1 sm:mt-2">{'필요한 기능을 선택해주세요'}</p>
           </div>
         </div>
+
+        {/* 메인 배너 */}
+        {mainBanner && mainBanner.image_url && (
+          <div className="px-4 sm:px-5 mb-4 sm:mb-6">
+            {mainBanner.link_url ? (
+              <a href={mainBanner.link_url} target="_blank" rel="noopener noreferrer">
+                <img
+                  src={mainBanner.image_url}
+                  alt="배너"
+                  className="w-full rounded-xl sm:rounded-2xl shadow-sm object-contain"
+                />
+              </a>
+            ) : (
+              <img
+                src={mainBanner.image_url}
+                alt="배너"
+                className="w-full rounded-xl sm:rounded-2xl shadow-sm object-contain"
+              />
+            )}
+          </div>
+        )}
 
         {/* App Grid */}
         <div className="px-4 sm:px-5">

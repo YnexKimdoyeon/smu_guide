@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { adminAPI, removeAdminToken } from '@/lib/api'
-import { Lock, Users, MessageCircle, Calendar, UserPlus, Building2, Heart, AlertTriangle, ChevronLeft, ChevronRight, Search, LogOut, Bell, Send } from 'lucide-react'
+import { Lock, Users, MessageCircle, Calendar, UserPlus, Building2, Heart, AlertTriangle, ChevronLeft, ChevronRight, Search, LogOut, Bell, Send, Image, X, Upload, Trash2 } from 'lucide-react'
 
 interface Stats {
   total_users: number
@@ -149,6 +149,17 @@ export default function AdminPage() {
   const [pushContent, setPushContent] = useState('')
   const [isSendingPush, setIsSendingPush] = useState(false)
 
+  // 배너/팝업 관련 상태
+  const [showBannerModal, setShowBannerModal] = useState(false)
+  const [bannerType, setBannerType] = useState<'main' | 'popup'>('main')
+  const [bannerImageData, setBannerImageData] = useState<string | null>(null)
+  const [bannerLinkUrl, setBannerLinkUrl] = useState('')
+  const [bannerTitle, setBannerTitle] = useState('')
+  const [bannerIsActive, setBannerIsActive] = useState(true)
+  const [isSavingBanner, setIsSavingBanner] = useState(false)
+  const [currentMainBanner, setCurrentMainBanner] = useState<any>(null)
+  const [currentPopup, setCurrentPopup] = useState<any>(null)
+
   // 기존 세션 확인
   useEffect(() => {
     const checkExistingSession = async () => {
@@ -197,12 +208,27 @@ export default function AdminPage() {
       ])
       setStats(statsData)
       setUsers(usersData)
+      // 배너 데이터 로드
+      loadBanners()
     } catch (err: any) {
       console.error('데이터 로드 실패:', err)
       // 인증 오류시 로그아웃
       if (err.message?.includes('인증') || err.message?.includes('세션')) {
         handleLogout()
       }
+    }
+  }
+
+  const loadBanners = async () => {
+    try {
+      const [mainBanner, popup] = await Promise.all([
+        adminAPI.getMainBanner(),
+        adminAPI.getPopup()
+      ])
+      setCurrentMainBanner(mainBanner)
+      setCurrentPopup(popup)
+    } catch (err) {
+      console.error('배너 로드 실패:', err)
     }
   }
 
@@ -255,6 +281,87 @@ export default function AdminPage() {
       alert('푸시 알림 전송 중 오류가 발생했습니다.')
     } finally {
       setIsSendingPush(false)
+    }
+  }
+
+  const openBannerModal = (type: 'main' | 'popup') => {
+    setBannerType(type)
+    if (type === 'main' && currentMainBanner?.is_active) {
+      setBannerImageData(currentMainBanner.image_url)
+      setBannerLinkUrl(currentMainBanner.link_url || '')
+      setBannerIsActive(true)
+    } else if (type === 'popup' && currentPopup?.is_active) {
+      setBannerImageData(currentPopup.image_url)
+      setBannerLinkUrl(currentPopup.link_url || '')
+      setBannerTitle(currentPopup.title || '')
+      setBannerIsActive(true)
+    } else {
+      setBannerImageData(null)
+      setBannerLinkUrl('')
+      setBannerTitle('')
+      setBannerIsActive(true)
+    }
+    setShowBannerModal(true)
+  }
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert('이미지 크기는 5MB 이하여야 합니다.')
+      return
+    }
+
+    const reader = new FileReader()
+    reader.onload = () => {
+      setBannerImageData(reader.result as string)
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleSaveBanner = async () => {
+    if (!bannerImageData) {
+      alert('이미지를 업로드해주세요.')
+      return
+    }
+
+    setIsSavingBanner(true)
+    try {
+      if (bannerType === 'main') {
+        await adminAPI.updateMainBanner(bannerImageData, bannerLinkUrl || null, bannerIsActive)
+        alert('메인 배너가 저장되었습니다.')
+      } else {
+        await adminAPI.updatePopup(bannerImageData, bannerLinkUrl || null, bannerIsActive, bannerTitle)
+        alert('팝업이 저장되었습니다.')
+      }
+      setShowBannerModal(false)
+      loadBanners()
+    } catch (err) {
+      console.error('배너 저장 실패:', err)
+      alert('배너 저장에 실패했습니다.')
+    } finally {
+      setIsSavingBanner(false)
+    }
+  }
+
+  const handleDeleteBanner = async (type: 'main' | 'popup') => {
+    if (!confirm(type === 'main' ? '메인 배너를 삭제하시겠습니까?' : '팝업을 삭제하시겠습니까?')) {
+      return
+    }
+
+    try {
+      if (type === 'main') {
+        await adminAPI.deleteMainBanner()
+        alert('메인 배너가 삭제되었습니다.')
+      } else {
+        await adminAPI.deletePopup()
+        alert('팝업이 삭제되었습니다.')
+      }
+      loadBanners()
+    } catch (err) {
+      console.error('배너 삭제 실패:', err)
+      alert('배너 삭제에 실패했습니다.')
     }
   }
 
@@ -659,6 +766,117 @@ export default function AdminPage() {
         </div>
       )}
 
+      {/* 배너 모달 */}
+      {showBannerModal && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+                  <Image className="w-5 h-5 text-green-400" />
+                </div>
+                <h3 className="font-semibold text-lg">
+                  {bannerType === 'main' ? '메인 배너 설정' : '팝업 설정'}
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowBannerModal(false)}
+                className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* 이미지 업로드 */}
+              <div>
+                <label className="block text-sm text-gray-400 mb-2">이미지</label>
+                {bannerImageData ? (
+                  <div className="relative">
+                    <img
+                      src={bannerImageData}
+                      alt="배너 미리보기"
+                      className="w-full rounded-xl object-contain max-h-60"
+                    />
+                    <button
+                      onClick={() => setBannerImageData(null)}
+                      className="absolute top-2 right-2 p-1.5 bg-red-500 rounded-full hover:bg-red-600 transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-gray-600 rounded-xl cursor-pointer hover:border-primary transition-colors">
+                    <Upload className="w-8 h-8 text-gray-500 mb-2" />
+                    <span className="text-sm text-gray-500">클릭하여 이미지 업로드</span>
+                    <span className="text-xs text-gray-600 mt-1">최대 5MB</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleImageUpload}
+                      className="hidden"
+                    />
+                  </label>
+                )}
+              </div>
+
+              {/* 팝업 제목 (팝업일 때만) */}
+              {bannerType === 'popup' && (
+                <div>
+                  <label className="block text-sm text-gray-400 mb-1">팝업 제목</label>
+                  <input
+                    type="text"
+                    value={bannerTitle}
+                    onChange={(e) => setBannerTitle(e.target.value)}
+                    placeholder="팝업 제목 (선택)"
+                    className="w-full px-4 py-3 rounded-xl bg-gray-700 text-white placeholder-gray-400 border border-gray-600 focus:border-primary focus:outline-none"
+                  />
+                </div>
+              )}
+
+              {/* 링크 URL */}
+              <div>
+                <label className="block text-sm text-gray-400 mb-1">링크 URL (선택)</label>
+                <input
+                  type="url"
+                  value={bannerLinkUrl}
+                  onChange={(e) => setBannerLinkUrl(e.target.value)}
+                  placeholder="https://..."
+                  className="w-full px-4 py-3 rounded-xl bg-gray-700 text-white placeholder-gray-400 border border-gray-600 focus:border-primary focus:outline-none"
+                />
+              </div>
+
+              {/* 활성화 토글 */}
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-400">활성화</span>
+                <button
+                  onClick={() => setBannerIsActive(!bannerIsActive)}
+                  className={`w-12 h-6 rounded-full transition-colors ${bannerIsActive ? 'bg-green-500' : 'bg-gray-600'}`}
+                >
+                  <div className={`w-5 h-5 rounded-full bg-white transition-transform ${bannerIsActive ? 'translate-x-6' : 'translate-x-0.5'}`} />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowBannerModal(false)}
+                className="flex-1 py-3 rounded-xl bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleSaveBanner}
+                disabled={isSavingBanner || !bannerImageData}
+                className="flex-1 py-3 rounded-xl bg-green-500 text-white font-semibold hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {isSavingBanner ? '저장 중...' : '저장'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-8">
         <h1 className="text-3xl font-bold">관리자 대시보드</h1>
         <div className="flex items-center gap-3">
@@ -676,6 +894,78 @@ export default function AdminPage() {
             <LogOut className="w-4 h-4" />
             로그아웃
           </button>
+        </div>
+      </div>
+
+      {/* 배너/팝업 관리 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+        {/* 메인 배너 */}
+        <div className="bg-gray-800 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold flex items-center gap-2">
+              <Image className="w-4 h-4" />
+              메인 배너
+            </h3>
+            <div className="flex items-center gap-2">
+              {currentMainBanner?.is_active && (
+                <button
+                  onClick={() => handleDeleteBanner('main')}
+                  className="p-1.5 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+              <button
+                onClick={() => openBannerModal('main')}
+                className="px-3 py-1.5 bg-green-500/20 text-green-400 rounded-lg text-sm hover:bg-green-500/30 transition-colors"
+              >
+                {currentMainBanner?.is_active ? '수정' : '설정'}
+              </button>
+            </div>
+          </div>
+          {currentMainBanner?.is_active && currentMainBanner?.image_url ? (
+            <img src={currentMainBanner.image_url} alt="메인 배너" className="w-full rounded-lg object-contain max-h-32" />
+          ) : (
+            <div className="h-24 bg-gray-700/50 rounded-lg flex items-center justify-center text-gray-500 text-sm">
+              배너 없음
+            </div>
+          )}
+        </div>
+
+        {/* 팝업 */}
+        <div className="bg-gray-800 rounded-xl p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold flex items-center gap-2">
+              <Image className="w-4 h-4" />
+              팝업
+            </h3>
+            <div className="flex items-center gap-2">
+              {currentPopup?.is_active && (
+                <button
+                  onClick={() => handleDeleteBanner('popup')}
+                  className="p-1.5 text-red-400 hover:bg-red-500/20 rounded-lg transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+              <button
+                onClick={() => openBannerModal('popup')}
+                className="px-3 py-1.5 bg-green-500/20 text-green-400 rounded-lg text-sm hover:bg-green-500/30 transition-colors"
+              >
+                {currentPopup?.is_active ? '수정' : '설정'}
+              </button>
+            </div>
+          </div>
+          {currentPopup?.is_active && currentPopup?.image_url ? (
+            <div>
+              {currentPopup.title && <p className="text-sm text-gray-400 mb-2">{currentPopup.title}</p>}
+              <img src={currentPopup.image_url} alt="팝업" className="w-full rounded-lg object-contain max-h-32" />
+            </div>
+          ) : (
+            <div className="h-24 bg-gray-700/50 rounded-lg flex items-center justify-center text-gray-500 text-sm">
+              팝업 없음
+            </div>
+          )}
         </div>
       </div>
 
