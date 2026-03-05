@@ -136,20 +136,20 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
                 <button
                   key={app.id}
                   onClick={() => handleOpenApp(app.id)}
-                  className="flex flex-col items-center gap-1.5 sm:gap-2.5 p-2 sm:p-4 rounded-xl sm:rounded-2xl bg-card shadow-sm border border-border/50 hover:shadow-md hover:scale-[1.02] active:scale-[0.97] transition-all relative min-touch-target"
+                  className="flex flex-col items-center gap-2 sm:gap-3 p-3 sm:p-4 rounded-xl sm:rounded-2xl bg-card shadow-sm border border-border/50 hover:shadow-md hover:scale-[1.02] active:scale-[0.97] transition-all relative min-touch-target"
                 >
                   <div
-                    className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center relative shrink-0"
+                    className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl sm:rounded-2xl flex items-center justify-center relative shrink-0"
                     style={{ backgroundColor: app.bgColor }}
                   >
-                    <Icon className="w-5 h-5 sm:w-7 sm:h-7" style={{ color: app.color }} />
+                    <Icon className="w-7 h-7 sm:w-8 sm:h-8" style={{ color: app.color }} />
                     {badgeCount && badgeCount > 0 && (
                       <span className="absolute -top-1 -right-1 min-w-4 sm:min-w-5 h-4 sm:h-5 px-1 flex items-center justify-center bg-red-500 text-white text-[10px] sm:text-xs font-bold rounded-full">
                         {badgeCount > 99 ? '99+' : badgeCount}
                       </span>
                     )}
                   </div>
-                  <span className="text-[10px] sm:text-xs font-medium text-foreground text-center leading-tight line-clamp-2 break-keep">
+                  <span className="text-xs sm:text-sm font-medium text-foreground text-center leading-tight line-clamp-2 break-keep">
                     {app.label}
                   </span>
                 </button>
