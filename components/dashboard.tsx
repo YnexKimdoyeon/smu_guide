@@ -463,15 +463,15 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
             </h3>
 
             {/* 올림픽 단상 */}
-            <div className="flex items-end justify-center gap-2 sm:gap-3 h-48 sm:h-52">
+            <div className="flex items-end justify-center gap-1.5 sm:gap-2 h-48 sm:h-52">
               {/* 2위 */}
               <div className="flex flex-col items-center">
-                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-gray-200 flex items-center justify-center mb-2 shadow-md">
-                  <span className="text-2xl sm:text-3xl">🥈</span>
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gray-200 flex items-center justify-center mb-2 shadow-md">
+                  <span className="text-xl sm:text-2xl">🥈</span>
                 </div>
-                <div className="bg-gray-200 w-20 sm:w-24 h-20 sm:h-24 rounded-t-lg flex flex-col items-center justify-center px-1.5 py-1">
-                  <span className="text-[9px] sm:text-[11px] font-bold text-gray-700 text-center leading-tight line-clamp-2 w-full break-keep">
-                    {rankings[1]?.department?.replace('학과', '').replace('학부', '').replace('전공', '') || '-'}
+                <div className="bg-gray-200 w-24 sm:w-28 h-20 sm:h-24 rounded-t-lg flex flex-col items-center justify-center px-1 py-1">
+                  <span className="text-[8px] sm:text-[10px] font-bold text-gray-700 text-center leading-tight line-clamp-2 w-full break-keep px-0.5">
+                    {rankings[1]?.department || '-'}
                   </span>
                   <div className="flex items-center gap-0.5 mt-1">
                     <Nut className="w-3 h-3 text-amber-600" />
@@ -484,12 +484,12 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
 
               {/* 1위 (가장 높음) */}
               <div className="flex flex-col items-center">
-                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-yellow-300 flex items-center justify-center mb-2 shadow-lg ring-2 ring-yellow-400">
-                  <span className="text-3xl sm:text-4xl">🥇</span>
+                <div className="w-14 h-14 sm:w-18 sm:h-18 rounded-full bg-yellow-300 flex items-center justify-center mb-2 shadow-lg ring-2 ring-yellow-400">
+                  <span className="text-2xl sm:text-3xl">🥇</span>
                 </div>
-                <div className="bg-yellow-300 w-24 sm:w-28 h-28 sm:h-32 rounded-t-lg flex flex-col items-center justify-center px-1.5 py-1">
-                  <span className="text-[10px] sm:text-xs font-bold text-yellow-900 text-center leading-tight line-clamp-2 w-full break-keep">
-                    {rankings[0]?.department?.replace('학과', '').replace('학부', '').replace('전공', '') || '-'}
+                <div className="bg-yellow-300 w-28 sm:w-32 h-28 sm:h-32 rounded-t-lg flex flex-col items-center justify-center px-1 py-1">
+                  <span className="text-[9px] sm:text-[11px] font-bold text-yellow-900 text-center leading-tight line-clamp-2 w-full break-keep px-0.5">
+                    {rankings[0]?.department || '-'}
                   </span>
                   <div className="flex items-center gap-0.5 mt-1">
                     <Nut className="w-3.5 h-3.5 text-amber-700" />
@@ -502,12 +502,12 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
 
               {/* 3위 */}
               <div className="flex flex-col items-center">
-                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-amber-600 flex items-center justify-center mb-2 shadow-md">
-                  <span className="text-xl sm:text-2xl">🥉</span>
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-amber-600 flex items-center justify-center mb-2 shadow-md">
+                  <span className="text-lg sm:text-xl">🥉</span>
                 </div>
-                <div className="bg-amber-600 w-18 sm:w-20 h-16 sm:h-20 rounded-t-lg flex flex-col items-center justify-center px-1.5 py-1">
-                  <span className="text-[8px] sm:text-[10px] font-bold text-white text-center leading-tight line-clamp-2 w-full break-keep">
-                    {rankings[2]?.department?.replace('학과', '').replace('학부', '').replace('전공', '') || '-'}
+                <div className="bg-amber-600 w-22 sm:w-24 h-16 sm:h-20 rounded-t-lg flex flex-col items-center justify-center px-1 py-1">
+                  <span className="text-[7px] sm:text-[9px] font-bold text-white text-center leading-tight line-clamp-2 w-full break-keep px-0.5">
+                    {rankings[2]?.department || '-'}
                   </span>
                   <div className="flex items-center gap-0.5 mt-1">
                     <Nut className="w-3 h-3 text-amber-200" />
