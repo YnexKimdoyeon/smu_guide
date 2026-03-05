@@ -19,11 +19,15 @@ CACHE_EXPIRE = 3600  # 1시간
 @router.get("", response_model=List[PhoneEntryResponse])
 def get_phone_entries(
     search: Optional[str] = Query(None, description="검색어"),
+    category: Optional[str] = Query(None, description="카테고리: dept/admin"),
     department: Optional[str] = Query(None, description="부서 필터"),
     db: Session = Depends(get_db)
 ):
     """전화번호부 조회"""
     query = db.query(PhoneEntry)
+
+    if category:
+        query = query.filter(PhoneEntry.category == category)
 
     if department:
         query = query.filter(PhoneEntry.department == department)

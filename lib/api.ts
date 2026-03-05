@@ -278,8 +278,11 @@ export const announcementAPI = {
 // 전화번호부 API
 export const phonebookAPI = {
   // 목록 조회
-  getEntries: async (search?: string) => {
-    const query = search ? `?search=${encodeURIComponent(search)}` : ''
+  getEntries: async (search?: string, category?: string) => {
+    const params = new URLSearchParams()
+    if (search) params.append('search', search)
+    if (category) params.append('category', category)
+    const query = params.toString() ? `?${params.toString()}` : ''
     return fetchAPI(`/phonebook${query}`)
   },
 }
