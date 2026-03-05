@@ -518,16 +518,39 @@ def auto_match_commute():
                 groups_by_key[key] = []
             groups_by_key[key].append(item)
 
-        # 매칭 실행
+        # 매칭 실행 (같은 학과 우선)
         for key, items in groups_by_key.items():
             if len(items) < 2:
                 continue
 
             commute_type, location = key.split("|", 1)
-            random.shuffle(items)
 
-            for k in range(0, len(items), 4):
-                sub_group = items[k:k+4]
+            # 학과별로 그룹화
+            dept_groups = {}
+            for item in items:
+                dept = item["user"].department or "기타"
+                if dept not in dept_groups:
+                    dept_groups[dept] = []
+                dept_groups[dept].append(item)
+
+            # 같은 학과끼리 먼저 매칭, 남은 인원은 다른 학과와 매칭
+            matched_items = []
+            remaining_items = []
+
+            for dept, dept_items in dept_groups.items():
+                random.shuffle(dept_items)
+                # 같은 학과 2명 이상이면 우선 매칭 그룹에 추가
+                if len(dept_items) >= 2:
+                    matched_items.extend(dept_items)
+                else:
+                    remaining_items.extend(dept_items)
+
+            # 남은 인원을 매칭 그룹 뒤에 추가
+            random.shuffle(remaining_items)
+            all_items = matched_items + remaining_items
+
+            for k in range(0, len(all_items), 4):
+                sub_group = all_items[k:k+4]
                 if len(sub_group) < 2:
                     continue
 

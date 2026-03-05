@@ -385,20 +385,25 @@ export function CommuteScreen({ onBack }: CommuteScreenProps) {
         </header>
 
         {/* 멤버 목록 */}
-        <div className="px-4 py-2 bg-muted/30 border-b border-border/30">
-          <div className="flex flex-wrap gap-2">
+        <div className="px-4 py-3 bg-muted/30 border-b border-border/30">
+          <div className="flex flex-col gap-2">
             {selectedGroup.members.map((member) => (
-              <span
+              <div
                 key={member.user_id}
-                className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl ${
                   member.is_confirmed === 1
-                    ? 'bg-green-500/20 text-green-600'
-                    : 'bg-primary/10 text-primary'
+                    ? 'bg-green-500/10 border border-green-500/30'
+                    : 'bg-card border border-border/50'
                 }`}
               >
-                {member.is_confirmed === 1 && <CheckCircle2 className="w-3 h-3" />}
-                {member.name}
-              </span>
+                {member.is_confirmed === 1 && <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />}
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-medium ${member.is_confirmed === 1 ? 'text-green-600' : 'text-foreground'}`}>
+                    {member.name}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">{member.department}</p>
+                </div>
+              </div>
             ))}
           </div>
         </div>
@@ -801,17 +806,18 @@ export function CommuteScreen({ onBack }: CommuteScreenProps) {
                             {group.time_slot}
                           </span>
                         </div>
-                        <div className="flex flex-wrap gap-1 mt-1.5">
+                        <div className="flex flex-col gap-1 mt-2">
                           {group.members.slice(0, 3).map((member) => (
-                            <span
+                            <div
                               key={member.user_id}
-                              className={`text-xs flex items-center gap-0.5 ${
+                              className={`text-xs flex items-center gap-1 ${
                                 member.is_confirmed === 1 ? 'text-green-600 font-medium' : 'text-muted-foreground'
                               }`}
                             >
-                              {member.is_confirmed === 1 && <CheckCircle2 className="w-3 h-3" />}
-                              {member.name}
-                            </span>
+                              {member.is_confirmed === 1 && <CheckCircle2 className="w-3 h-3 flex-shrink-0" />}
+                              <span className="font-medium">{member.name}</span>
+                              <span className="text-muted-foreground">({member.department})</span>
+                            </div>
                           ))}
                           {group.members.length > 3 && (
                             <span className="text-xs text-muted-foreground">
