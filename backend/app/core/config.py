@@ -26,6 +26,10 @@ class Settings(BaseSettings):
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = 60
 
+    # Swing2App Push Notification
+    SWING_APP_ID: str = ""
+    SWING_API_KEY: str = ""
+
     @property
     def DATABASE_URL(self) -> str:
         password = quote_plus(self.DB_PASSWORD)

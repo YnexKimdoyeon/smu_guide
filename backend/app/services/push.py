@@ -4,9 +4,9 @@ Swing2App 푸시 알림 서비스
 import httpx
 from typing import List, Optional
 
+from app.core.config import settings
+
 # Swing2App API 설정
-SWING_APP_ID = "eacb1c4b-06c5-4244-b17e-da99d2635921"
-SWING_API_KEY = "6fe3e7d9-db53-416a-a721-7fc2d82976b6"
 SWING_PUSH_URL = "https://www.swing2app.com/swapi/push_api_send_message"
 
 
@@ -37,8 +37,8 @@ async def send_push_notification(
     send_target = ",".join(user_ids)
 
     form_data = {
-        "app_id": SWING_APP_ID,
-        "app_api_key": SWING_API_KEY,
+        "app_id": settings.SWING_APP_ID,
+        "app_api_key": settings.SWING_API_KEY,
         "send_target_list": send_target,
         "send_type": "push",
         "message_title": title,
@@ -80,8 +80,8 @@ async def send_push_to_all(
     모든 사용자에게 푸시 알림 전송
     """
     form_data = {
-        "app_id": SWING_APP_ID,
-        "app_api_key": SWING_API_KEY,
+        "app_id": settings.SWING_APP_ID,
+        "app_api_key": settings.SWING_API_KEY,
         "send_target_list": "-1",  # -1은 전체 발송
         "send_type": "push",
         "message_title": title,
@@ -131,8 +131,8 @@ def send_push_sync(
     send_target = ",".join(user_ids)
 
     form_data = {
-        "app_id": SWING_APP_ID,
-        "app_api_key": SWING_API_KEY,
+        "app_id": settings.SWING_APP_ID,
+        "app_api_key": settings.SWING_API_KEY,
         "send_target_list": send_target,
         "send_type": "push",
         "message_title": title,
