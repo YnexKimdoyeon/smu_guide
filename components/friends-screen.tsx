@@ -253,12 +253,12 @@ export function FriendsScreen({ onBack }: FriendsScreenProps) {
                   value={studentIdInput}
                   onChange={(e) => setStudentIdInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleSendRequest()}
-                  className="flex-1 h-11 px-4 rounded-xl bg-secondary border border-border/50 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                  className="flex-1 min-w-0 h-11 px-4 rounded-xl bg-secondary border border-border/50 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
                 />
                 <button
                   onClick={handleSendRequest}
                   disabled={isSending || !studentIdInput.trim()}
-                  className="h-11 px-4 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  className="h-11 px-4 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shrink-0 whitespace-nowrap"
                 >
                   <Send className="w-4 h-4" />
                   {isSending ? '전송 중...' : '신청'}
@@ -484,9 +484,9 @@ export function FriendsScreen({ onBack }: FriendsScreenProps) {
 
         {/* 도토리 선물 모달 */}
         {showGiftModal && giftTarget && (
-          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-            <div className="bg-card rounded-2xl overflow-hidden max-w-sm w-full shadow-2xl animate-in zoom-in-95 duration-200">
-              <div className="p-6">
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-6">
+            <div className="bg-card rounded-2xl overflow-hidden w-full max-w-[calc(100vw-48px)] sm:max-w-sm shadow-2xl animate-in zoom-in-95 duration-200">
+              <div className="p-5">
                 <div className="w-16 h-16 mx-auto mb-4 bg-amber-100 rounded-full flex items-center justify-center">
                   <Nut className="w-8 h-8 text-amber-600" />
                 </div>
@@ -505,7 +505,7 @@ export function FriendsScreen({ onBack }: FriendsScreenProps) {
                     placeholder="개수 입력"
                     value={giftAmount}
                     onChange={(e) => setGiftAmount(e.target.value.replace(/[^0-9]/g, ''))}
-                    className="flex-1 h-12 px-4 rounded-xl bg-secondary border border-border/50 text-center text-base font-semibold text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    className="flex-1 min-w-0 h-12 px-4 rounded-xl bg-secondary border border-border/50 text-center text-base font-semibold text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
                     style={{ fontSize: '16px' }}
                   />
                   <span className="text-sm text-muted-foreground shrink-0">개</span>
