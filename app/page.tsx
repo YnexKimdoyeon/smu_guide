@@ -48,6 +48,8 @@ export default function Home() {
           })
           setCurrentScreen('dashboard')
           currentScreenRef.current = 'dashboard'
+          // 대시보드 뒤로가기를 잡기 위한 히스토리 엔트리
+          history.pushState(null, '')
         } catch {
           removeToken()
         }
@@ -63,8 +65,14 @@ export default function Home() {
       const screen = currentScreenRef.current
       const prevScreen = previousScreenRef.current
 
-      // 대시보드나 로그인에서는 웹뷰가 알아서 처리 (앱 종료)
-      if (screen === 'dashboard' || screen === 'login') return
+      // 대시보드나 로그인에서 뒤로가기 → 앱 종료
+      if (screen === 'dashboard' || screen === 'login') {
+        const swingPlugin = (window as any).swingWebViewPlugin
+        if (swingPlugin?.app?.exit?.doAppExit) {
+          swingPlugin.app.exit.doAppExit()
+        }
+        return
+      }
 
       // 하위 화면에서 뒤로가기 → 대시보드 또는 선문대 정보로
       if (sunmoonSubApps.includes(screen) && prevScreen === 'sunmoon-info') {
@@ -96,6 +104,7 @@ export default function Home() {
       })
       setCurrentScreen('dashboard')
       currentScreenRef.current = 'dashboard'
+      history.pushState(null, '')
       return { success: true }
     } catch (error) {
       return { success: false, error: (error as Error).message }
