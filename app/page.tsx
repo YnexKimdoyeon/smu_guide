@@ -48,8 +48,6 @@ export default function Home() {
           })
           setCurrentScreen('dashboard')
           currentScreenRef.current = 'dashboard'
-          // 대시보드 뒤로가기를 잡기 위한 히스토리 엔트리
-          history.pushState(null, '')
         } catch {
           removeToken()
         }
@@ -59,30 +57,23 @@ export default function Home() {
     checkAuth()
   }, [])
 
-  // 안드로이드 뒤로가기: 하위앱 → 대시보드 네비게이션
+  // 안드로이드 뒤로가기: 하위앱 → 상위 화면 네비게이션
+  // 대시보드에서는 히스토리가 비어있으므로 웹뷰가 자연스럽게 앱 종료
   useEffect(() => {
     const handlePopState = () => {
       const screen = currentScreenRef.current
       const prevScreen = previousScreenRef.current
 
-      // 대시보드나 로그인에서 뒤로가기 → 앱 종료
-      if (screen === 'dashboard' || screen === 'login') {
-        const swingPlugin = (window as any).swingWebViewPlugin
-        if (swingPlugin?.app?.exit?.doAppExit) {
-          swingPlugin.app.exit.doAppExit()
-        }
-        return
-      }
+      // 대시보드나 로그인 → 히스토리 없음 → 웹뷰가 앱 종료 처리
+      if (screen === 'dashboard' || screen === 'login') return
 
-      // 하위 화면에서 뒤로가기 → 대시보드 또는 선문대 정보로
+      // 하위 화면에서 뒤로가기 (pushState 추가 안 함 → 히스토리 소진되게)
       if (sunmoonSubApps.includes(screen) && prevScreen === 'sunmoon-info') {
         setCurrentScreen('sunmoon-info')
         currentScreenRef.current = 'sunmoon-info'
-        history.pushState(null, '')
       } else {
         setCurrentScreen('dashboard')
         currentScreenRef.current = 'dashboard'
-        history.pushState(null, '')
       }
       setPreviousScreen(null)
       previousScreenRef.current = null
@@ -104,7 +95,6 @@ export default function Home() {
       })
       setCurrentScreen('dashboard')
       currentScreenRef.current = 'dashboard'
-      history.pushState(null, '')
       return { success: true }
     } catch (error) {
       return { success: false, error: (error as Error).message }
