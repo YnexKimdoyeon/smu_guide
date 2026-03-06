@@ -220,14 +220,12 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
     }
   }
 
-  // 도토리 정보 로드 + 자동 출석 체크 + 선물 확인
+  // 도토리 정보 로드 + 자동 출석 체크
   useEffect(() => {
-    const loadDotoriData = async () => {
+    const loadDotoriInfo = async () => {
       try {
-        // 먼저 정보 조회
         const info = await dotoriAPI.getInfo()
 
-        // 출석 가능하면 자동 출석 체크
         if (info.can_attend_today) {
           try {
             const attendResult = await dotoriAPI.checkAttendance()
@@ -238,39 +236,42 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
                 can_attend_today: false
               })
               setAttendanceMessage(attendResult.message)
-              // 3초 후 메시지 숨기기
               setTimeout(() => setAttendanceMessage(null), 3000)
-            } else {
-              setDotoriInfo(info)
+              return
             }
-          } catch {
-            setDotoriInfo(info)
-          }
-        } else {
-          setDotoriInfo(info)
+          } catch { /* 출석 실패해도 info는 표시 */ }
         }
+        setDotoriInfo(info)
+      } catch { /* 무시 */ }
+    }
+    loadDotoriInfo()
+  }, [])
 
-        // 랭킹 조회
+  // 랭킹 조회 (독립 실행)
+  useEffect(() => {
+    const loadRanking = async () => {
+      try {
         const rankingData = await dotoriAPI.getRanking()
         setRankings(rankingData.rankings || [])
         setMyDeptRanking(rankingData.my_department || null)
-
-        // 읽지 않은 선물 확인
-        try {
-          const giftsData = await dotoriAPI.getUnreadGifts()
-          if (giftsData.gifts && giftsData.gifts.length > 0) {
-            setReceivedGifts(giftsData.gifts)
-            setCurrentGiftIndex(0)
-            setShowGiftPopup(true)
-          }
-        } catch {
-          // 무시
-        }
-      } catch {
-        // 무시
-      }
+      } catch { /* 무시 */ }
     }
-    loadDotoriData()
+    loadRanking()
+  }, [])
+
+  // 읽지 않은 선물 확인 (독립 실행)
+  useEffect(() => {
+    const loadGifts = async () => {
+      try {
+        const giftsData = await dotoriAPI.getUnreadGifts()
+        if (giftsData.gifts && giftsData.gifts.length > 0) {
+          setReceivedGifts(giftsData.gifts)
+          setCurrentGiftIndex(0)
+          setShowGiftPopup(true)
+        }
+      } catch { /* 무시 */ }
+    }
+    loadGifts()
   }, [])
 
   // 상점에서 구매 완료 시 도토리 정보 갱신
