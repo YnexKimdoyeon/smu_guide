@@ -74,6 +74,32 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
   const [showGiftPopup, setShowGiftPopup] = useState(false)
   const [currentGiftIndex, setCurrentGiftIndex] = useState(0)
 
+  // 카카오 애드핏 광고 로드
+  useEffect(() => {
+    const container = document.getElementById('kakao-ad-container')
+    if (!container) return
+
+    // ins 태그 생성
+    const ins = document.createElement('ins')
+    ins.className = 'kakao_ad_area'
+    ins.style.display = 'none'
+    ins.setAttribute('data-ad-unit', 'DAN-eP3YlnKGN2yQyUpf')
+    ins.setAttribute('data-ad-width', '320')
+    ins.setAttribute('data-ad-height', '50')
+    container.appendChild(ins)
+
+    // 스크립트 로드
+    const script = document.createElement('script')
+    script.type = 'text/javascript'
+    script.src = '//t1.daumcdn.net/kas/static/ba.min.js'
+    script.async = true
+    container.appendChild(script)
+
+    return () => {
+      container.innerHTML = ''
+    }
+  }, [])
+
   // Swing2App 사용자 연동 (푸시 알림용)
   useEffect(() => {
     if (user.studentId && user.name) {
@@ -395,13 +421,9 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
 
       {/* 스크롤 영역 */}
       <div className="flex-1 overflow-y-auto">
-        {/* Welcome Card */}
+        {/* 카카오 애드핏 띠배너 */}
         <div className="px-4 sm:px-5 mb-4 sm:mb-6">
-          <div className="rounded-xl sm:rounded-2xl bg-primary p-4 sm:p-5 shadow-lg">
-            <p className="text-primary-foreground/80 text-xs sm:text-sm font-medium">{'오늘도 즐거운 캠퍼스 생활!'}</p>
-            <h2 className="text-primary-foreground text-lg sm:text-xl font-bold mt-1">{'선문대학교 가이드'}</h2>
-            <p className="text-primary-foreground/70 text-[10px] sm:text-xs mt-1 sm:mt-2">{'필요한 기능을 선택해주세요'}</p>
-          </div>
+          <div className="flex justify-center" id="kakao-ad-container" />
         </div>
 
         {/* 메인 배너 */}
