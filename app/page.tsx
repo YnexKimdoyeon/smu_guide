@@ -24,13 +24,6 @@ type Screen = 'login' | 'dashboard' | AppId
 // 선문대 정보 하위 앱들
 const sunmoonSubApps: Screen[] = ['academic-calendar', 'announcements', 'phonebook', 'cafeteria']
 
-// 히스토리 버퍼를 충분히 쌓아서 웹뷰 이탈 방지
-function pushHistoryBuffer(screen: string, count = 5) {
-  for (let i = 0; i < count; i++) {
-    history.pushState({ screen, buffer: true }, '')
-  }
-}
-
 
 export default function Home() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('login')
@@ -41,6 +34,11 @@ export default function Home() {
   // popstate 핸들러 내에서 최신 state를 참조하기 위한 ref
   const currentScreenRef = useRef<Screen>('login')
   const previousScreenRef = useRef<Screen | null>(null)
+
+  // 해시로 화면 이동 (웹뷰 호환 브라우저 히스토리 생성)
+  const navigateHash = useCallback((screen: Screen) => {
+    window.location.hash = '#' + screen
+  }, [])
 
   // 앱 시작 시 토큰 확인
   useEffect(() => {
@@ -57,9 +55,8 @@ export default function Home() {
           })
           setCurrentScreen('dashboard')
           currentScreenRef.current = 'dashboard'
-          // 히스토리 버퍼를 충분히 쌓아서 뒤로가기 시 웹뷰 이탈 방지
-          history.replaceState({ screen: 'dashboard' }, '')
-          pushHistoryBuffer('dashboard')
+          // 해시 설정 (replaceState로 초기 엔트리 교체 후 해시 추가)
+          window.location.replace('#dashboard')
         } catch {
           removeToken()
         }
@@ -69,37 +66,66 @@ export default function Home() {
     checkAuth()
   }, [])
 
-  // popstate 이벤트 (안드로이드 뒤로가기) 처리
+  // hashchange 이벤트 (안드로이드 뒤로가기) 처리
   useEffect(() => {
-    const handlePopState = (e: PopStateEvent) => {
+    const handleHashChange = () => {
+      const hash = window.location.hash.replace('#', '')
       const screen = currentScreenRef.current
       const prevScreen = previousScreenRef.current
 
-      // 대시보드나 로그인에서 뒤로가기 → 종료 확인 팝업
-      if (screen === 'dashboard' || screen === 'login') {
-        // 히스토리 버퍼 다시 채우기
-        pushHistoryBuffer(screen)
-        setShowExitDialog(true)
+      // 해시가 비어있거나 현재 화면보다 상위로 간 경우 = 뒤로가기
+      if (!hash || hash === '') {
+        // 대시보드나 로그인에서 뒤로가기 → 종료 확인 팝업
+        if (screen === 'dashboard' || screen === 'login') {
+          // 해시 복구
+          window.location.replace('#' + screen)
+          setShowExitDialog(true)
+          return
+        }
+
+        // 하위 화면에서 뒤로가기
+        if (sunmoonSubApps.includes(screen) && prevScreen === 'sunmoon-info') {
+          setCurrentScreen('sunmoon-info')
+          currentScreenRef.current = 'sunmoon-info'
+          window.location.replace('#sunmoon-info')
+        } else {
+          setCurrentScreen('dashboard')
+          currentScreenRef.current = 'dashboard'
+          window.location.replace('#dashboard')
+        }
+        setPreviousScreen(null)
+        previousScreenRef.current = null
         return
       }
 
-      // 하위 화면에서 뒤로가기
-      if (sunmoonSubApps.includes(screen) && prevScreen === 'sunmoon-info') {
+      // 해시가 dashboard인데 현재 하위화면인 경우 = 뒤로가기
+      if (hash === 'dashboard' && screen !== 'dashboard' && screen !== 'login') {
+        if (sunmoonSubApps.includes(screen) && prevScreen === 'sunmoon-info') {
+          setCurrentScreen('sunmoon-info')
+          currentScreenRef.current = 'sunmoon-info'
+          window.location.replace('#sunmoon-info')
+        } else {
+          setCurrentScreen('dashboard')
+          currentScreenRef.current = 'dashboard'
+        }
+        setPreviousScreen(null)
+        previousScreenRef.current = null
+        return
+      }
+
+      // 해시가 sunmoon-info인데 현재 하위앱인 경우
+      if (hash === 'sunmoon-info' && sunmoonSubApps.includes(screen)) {
         setCurrentScreen('sunmoon-info')
         currentScreenRef.current = 'sunmoon-info'
-        pushHistoryBuffer('sunmoon-info')
-      } else {
-        setCurrentScreen('dashboard')
-        currentScreenRef.current = 'dashboard'
-        pushHistoryBuffer('dashboard')
+        setPreviousScreen(null)
+        previousScreenRef.current = null
+        return
       }
-      setPreviousScreen(null)
-      previousScreenRef.current = null
     }
 
-    window.addEventListener('popstate', handlePopState)
+    window.addEventListener('hashchange', handleHashChange)
     return () => {
-      window.removeEventListener('popstate', handlePopState)
+      window.removeEventListener('hashchange', handleHashChange)
     }
   }, [])
 
@@ -115,8 +141,7 @@ export default function Home() {
       })
       setCurrentScreen('dashboard')
       currentScreenRef.current = 'dashboard'
-      history.replaceState({ screen: 'dashboard' }, '')
-      pushHistoryBuffer('dashboard')
+      window.location.replace('#dashboard')
       return { success: true }
     } catch (error) {
       return { success: false, error: (error as Error).message }
@@ -134,8 +159,8 @@ export default function Home() {
     previousScreenRef.current = currentScreen
     setCurrentScreen(appId)
     currentScreenRef.current = appId
-    // 브라우저 히스토리에 추가 → 뒤로가기 버튼으로 돌아올 수 있게
-    history.pushState({ screen: appId }, '')
+    // 해시 변경으로 브라우저 히스토리 생성
+    navigateHash(appId)
   }
 
   const handleBack = () => {
@@ -143,14 +168,14 @@ export default function Home() {
     if (sunmoonSubApps.includes(currentScreen) && previousScreen === 'sunmoon-info') {
       setCurrentScreen('sunmoon-info')
       currentScreenRef.current = 'sunmoon-info'
+      window.location.replace('#sunmoon-info')
     } else {
       setCurrentScreen('dashboard')
       currentScreenRef.current = 'dashboard'
+      window.location.replace('#dashboard')
     }
     setPreviousScreen(null)
     previousScreenRef.current = null
-    // UI 버튼 클릭 시 현재 히스토리를 교체 (popstate 발생 안 함)
-    history.replaceState({ screen: currentScreenRef.current }, '')
   }
 
   const handleExitApp = useCallback(() => {
@@ -218,7 +243,7 @@ export default function Home() {
             previousScreenRef.current = 'sunmoon-info'
             setCurrentScreen(subAppId)
             currentScreenRef.current = subAppId
-            history.pushState({ screen: subAppId }, '')
+            navigateHash(subAppId)
           }}
         />
       )}
