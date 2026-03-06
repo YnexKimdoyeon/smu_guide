@@ -498,14 +498,17 @@ export function FriendsScreen({ onBack }: FriendsScreenProps) {
 
                 <div className="flex items-center gap-2 mb-4">
                   <input
-                    type="number"
+                    type="tel"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     min="1"
                     placeholder="개수 입력"
                     value={giftAmount}
-                    onChange={(e) => setGiftAmount(e.target.value)}
-                    className="flex-1 h-12 px-4 rounded-xl bg-secondary border border-border/50 text-center text-lg font-semibold text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    onChange={(e) => setGiftAmount(e.target.value.replace(/[^0-9]/g, ''))}
+                    className="flex-1 h-12 px-4 rounded-xl bg-secondary border border-border/50 text-center text-base font-semibold text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    style={{ fontSize: '16px' }}
                   />
-                  <span className="text-sm text-muted-foreground">개</span>
+                  <span className="text-sm text-muted-foreground shrink-0">개</span>
                 </div>
 
                 <div className="flex gap-2">

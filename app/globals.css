@@ -92,6 +92,10 @@
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
   }
+  /* iOS에서 input 포커스 시 자동 줌 방지 (16px 미만이면 줌 발생) */
+  input, textarea, select {
+    font-size: 16px;
+  }
 }
 
 /* 반응형 유틸리티 */
