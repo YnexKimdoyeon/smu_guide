@@ -869,28 +869,21 @@ async def security_headers_middleware(request: Request, call_next):
     return response
 
 
-# Rate Limiting 미들웨어
-@app.middleware("http")
-async def rate_limit_middleware(request: Request, call_next):
-    # WebSocket 및 헬스체크는 제외
-    if request.url.path.startswith("/ws") or request.url.path == "/health":
-        return await call_next(request)
-
-    client_ip = request.client.host if request.client else "unknown"
-    cleanup_old_requests(client_ip)
-
-    # 요청 횟수 체크
-    if len(rate_limit_store[client_ip]) >= settings.RATE_LIMIT_PER_MINUTE:
-        return JSONResponse(
-            status_code=429,
-            content={"detail": "요청이 너무 많습니다. 잠시 후 다시 시도해주세요."}
-        )
-
-    # 현재 요청 기록
-    rate_limit_store[client_ip].append(time.time())
-
-    response = await call_next(request)
-    return response
+# Rate Limiting 미들웨어 (비활성화 - 리버스 프록시 환경에서 모든 유저가 같은 IP로 잡힘)
+# @app.middleware("http")
+# async def rate_limit_middleware(request: Request, call_next):
+#     if request.url.path.startswith("/ws") or request.url.path == "/health":
+#         return await call_next(request)
+#     client_ip = request.client.host if request.client else "unknown"
+#     cleanup_old_requests(client_ip)
+#     if len(rate_limit_store[client_ip]) >= settings.RATE_LIMIT_PER_MINUTE:
+#         return JSONResponse(
+#             status_code=429,
+#             content={"detail": "요청이 너무 많습니다. 잠시 후 다시 시도해주세요."}
+#         )
+#     rate_limit_store[client_ip].append(time.time())
+#     response = await call_next(request)
+#     return response
 
 
 # CORS 설정
