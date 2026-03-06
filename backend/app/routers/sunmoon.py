@@ -21,6 +21,17 @@ from app.routers.scholarship import folio_credentials_cache
 router = APIRouter(prefix="/sunmoon", tags=["선문대 연동"])
 
 
+def get_real_ip(request: Request) -> str:
+    """프록시 뒤에서도 실제 클라이언트 IP를 가져옴"""
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    real_ip = request.headers.get("X-Real-IP")
+    if real_ip:
+        return real_ip.strip()
+    return request.client.host if request.client else "unknown"
+
+
 def check_login_blocked(ip: str) -> bool:
     """로그인 차단 여부 확인"""
     from app.main import login_attempt_store
@@ -322,8 +333,8 @@ async def login_with_sunmoon(
     db: Session = Depends(get_db)
 ):
     """선문대 종합정보시스템으로 로그인"""
-    # IP 추출
-    client_ip = request.client.host if request.client else "unknown"
+    # 실제 클라이언트 IP 추출 (프록시 헤더 우선)
+    client_ip = get_real_ip(request)
 
     # 차단 여부 확인
     if check_login_blocked(client_ip):
