@@ -55,8 +55,8 @@ export default function Home() {
           })
           setCurrentScreen('dashboard')
           currentScreenRef.current = 'dashboard'
-          // 해시 설정 (replaceState로 초기 엔트리 교체 후 해시 추가)
-          window.location.replace('#dashboard')
+          // 해시 추가 (replace 아닌 push로 뒤로가기 잡을 엔트리 유지)
+          window.location.hash = '#dashboard'
         } catch {
           removeToken()
         }
@@ -77,8 +77,8 @@ export default function Home() {
       if (!hash || hash === '') {
         // 대시보드나 로그인에서 뒤로가기 → 종료 확인 팝업
         if (screen === 'dashboard' || screen === 'login') {
-          // 해시 복구
-          window.location.replace('#' + screen)
+          // 해시 다시 push (replace 아님 - 다음 뒤로가기도 잡기 위해)
+          window.location.hash = '#' + screen
           setShowExitDialog(true)
           return
         }
@@ -87,11 +87,11 @@ export default function Home() {
         if (sunmoonSubApps.includes(screen) && prevScreen === 'sunmoon-info') {
           setCurrentScreen('sunmoon-info')
           currentScreenRef.current = 'sunmoon-info'
-          window.location.replace('#sunmoon-info')
+          window.location.hash = '#sunmoon-info'
         } else {
           setCurrentScreen('dashboard')
           currentScreenRef.current = 'dashboard'
-          window.location.replace('#dashboard')
+          window.location.hash = '#dashboard'
         }
         setPreviousScreen(null)
         previousScreenRef.current = null
@@ -141,7 +141,7 @@ export default function Home() {
       })
       setCurrentScreen('dashboard')
       currentScreenRef.current = 'dashboard'
-      window.location.replace('#dashboard')
+      window.location.hash = '#dashboard'
       return { success: true }
     } catch (error) {
       return { success: false, error: (error as Error).message }
@@ -164,18 +164,8 @@ export default function Home() {
   }
 
   const handleBack = () => {
-    // 선문대 정보 하위 앱에서 뒤로가면 선문대 정보로
-    if (sunmoonSubApps.includes(currentScreen) && previousScreen === 'sunmoon-info') {
-      setCurrentScreen('sunmoon-info')
-      currentScreenRef.current = 'sunmoon-info'
-      window.location.replace('#sunmoon-info')
-    } else {
-      setCurrentScreen('dashboard')
-      currentScreenRef.current = 'dashboard'
-      window.location.replace('#dashboard')
-    }
-    setPreviousScreen(null)
-    previousScreenRef.current = null
+    // UI 뒤로가기 버튼 → history.back()으로 hashchange 발생시킴
+    history.back()
   }
 
   const handleExitApp = useCallback(() => {
