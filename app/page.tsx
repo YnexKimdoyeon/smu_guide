@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { LoginScreen } from '@/components/login-screen'
 import { Dashboard, type AppId } from '@/components/dashboard'
 import { TimetableScreen } from '@/components/timetable-screen'
@@ -24,46 +24,13 @@ type Screen = 'login' | 'dashboard' | AppId
 // 선문대 정보 하위 앱들
 const sunmoonSubApps: Screen[] = ['academic-calendar', 'announcements', 'phonebook', 'cafeteria']
 
-// 뒤로가기 두 번 눌러야 종료 안내 토스트
-function showBackToast() {
-  const existing = document.getElementById('back-toast')
-  if (existing) existing.remove()
-
-  const toast = document.createElement('div')
-  toast.id = 'back-toast'
-  toast.textContent = '뒤로가기를 한 번 더 누르면 종료됩니다'
-  toast.style.cssText = `
-    position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
-    background: rgba(0,0,0,0.75); color: white; padding: 10px 20px;
-    border-radius: 24px; font-size: 14px; z-index: 99999;
-    animation: fadeInOut 2s ease-in-out forwards;
-    pointer-events: none; white-space: nowrap;
-  `
-  // 애니메이션 스타일 추가
-  if (!document.getElementById('back-toast-style')) {
-    const style = document.createElement('style')
-    style.id = 'back-toast-style'
-    style.textContent = `
-      @keyframes fadeInOut {
-        0% { opacity: 0; transform: translateX(-50%) translateY(10px); }
-        15% { opacity: 1; transform: translateX(-50%) translateY(0); }
-        85% { opacity: 1; transform: translateX(-50%) translateY(0); }
-        100% { opacity: 0; transform: translateX(-50%) translateY(10px); }
-      }
-    `
-    document.head.appendChild(style)
-  }
-  document.body.appendChild(toast)
-  setTimeout(() => toast.remove(), 2000)
-}
 
 export default function Home() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('login')
   const [previousScreen, setPreviousScreen] = useState<Screen | null>(null)
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const backPressedOnce = useRef(false)
-  const backTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const [showExitDialog, setShowExitDialog] = useState(false)
   // popstate 핸들러 내에서 최신 state를 참조하기 위한 ref
   const currentScreenRef = useRef<Screen>('login')
   const previousScreenRef = useRef<Screen | null>(null)
@@ -101,28 +68,11 @@ export default function Home() {
       const screen = currentScreenRef.current
       const prevScreen = previousScreenRef.current
 
-      // 대시보드나 로그인에서 뒤로가기 → 앱 종료 방지
+      // 대시보드나 로그인에서 뒤로가기 → 종료 확인 팝업
       if (screen === 'dashboard' || screen === 'login') {
         // 히스토리를 다시 쌓아서 다음 뒤로가기도 잡을 수 있게
         history.pushState({ screen }, '')
-
-        if (backPressedOnce.current) {
-          // 두 번째 누름 → 네이티브 앱 종료 허용
-          if (typeof window !== 'undefined') {
-            const swingPlugin = (window as any).swingWebViewPlugin
-            if (swingPlugin?.app?.exit?.doAppExit) {
-              swingPlugin.app.exit.doAppExit()
-            }
-          }
-          return
-        }
-
-        backPressedOnce.current = true
-        // 토스트 메시지 표시 (간단한 alert 대신)
-        showBackToast()
-        backTimerRef.current = setTimeout(() => {
-          backPressedOnce.current = false
-        }, 2000)
+        setShowExitDialog(true)
         return
       }
 
@@ -145,7 +95,6 @@ export default function Home() {
     window.addEventListener('popstate', handlePopState)
     return () => {
       window.removeEventListener('popstate', handlePopState)
-      if (backTimerRef.current) clearTimeout(backTimerRef.current)
     }
   }, [])
 
@@ -198,6 +147,19 @@ export default function Home() {
     // UI 버튼 클릭 시 현재 히스토리를 교체 (popstate 발생 안 함)
     history.replaceState({ screen: currentScreenRef.current }, '')
   }
+
+  const handleExitApp = useCallback(() => {
+    setShowExitDialog(false)
+    if (typeof window !== 'undefined') {
+      const swingPlugin = (window as any).swingWebViewPlugin
+      if (swingPlugin?.app?.exit?.doAppExit) {
+        swingPlugin.app.exit.doAppExit()
+      } else {
+        // 웹뷰 플러그인이 없는 경우 (브라우저 테스트 등)
+        window.close()
+      }
+    }
+  }, [])
 
   if (isLoading) {
     return (
@@ -271,6 +233,31 @@ export default function Home() {
       )}
       {currentScreen === 'shuttle' && (
         <ShuttleScreen onBack={handleBack} />
+      )}
+
+      {/* 앱 종료 확인 팝업 */}
+      {showExitDialog && (
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-2xl p-6 mx-8 max-w-sm w-full shadow-xl">
+            <p className="text-center text-gray-800 text-lg font-medium mb-6">
+              앱을 종료하시겠습니까?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowExitDialog(false)}
+                className="flex-1 py-3 rounded-xl bg-gray-100 text-gray-600 font-medium text-base"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleExitApp}
+                className="flex-1 py-3 rounded-xl bg-red-500 text-white font-medium text-base"
+              >
+                종료
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
