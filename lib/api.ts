@@ -95,27 +95,6 @@ export const authAPI = {
     return data
   },
 
-  // 일반 로그인
-  login: async (studentId: string, password: string) => {
-    const data = await fetchAPI('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ student_id: studentId, password }),
-    })
-    setToken(data.access_token)
-    if (data.user_id) {
-      localStorage.setItem('user_id', String(data.user_id))
-    }
-    return data
-  },
-
-  // 회원가입
-  register: async (studentId: string, password: string, name: string, department: string) => {
-    return fetchAPI('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify({ student_id: studentId, password, name, department }),
-    })
-  },
-
   // 내 정보
   getMe: async () => {
     return fetchAPI('/auth/me')
@@ -299,14 +278,6 @@ export const friendAPI = {
     return fetchAPI('/friends/requests')
   },
 
-  // 친구 요청 보내기
-  sendRequest: async (friendId: number) => {
-    return fetchAPI('/friends', {
-      method: 'POST',
-      body: JSON.stringify({ friend_id: friendId }),
-    })
-  },
-
   // 학번으로 친구 요청 보내기
   sendRequestByStudentId: async (studentId: string) => {
     return fetchAPI(`/friends/request-by-student-id?student_id=${encodeURIComponent(studentId)}`, {
@@ -334,11 +305,6 @@ export const friendAPI = {
       method: 'POST',
       body: JSON.stringify(friendIds),
     })
-  },
-
-  // 사용자 검색
-  searchUsers: async (query: string) => {
-    return fetchAPI(`/friends/search?q=${encodeURIComponent(query)}`)
   },
 
   // 친구 삭제
@@ -900,6 +866,29 @@ export const adminAPI = {
     return fetchAdminAPI('/admin/push/all', {
       method: 'POST',
       body: JSON.stringify({ title, content }),
+    })
+  },
+
+  // 회원 삭제 (관련 데이터 전체 삭제)
+  deleteUser: async (userId: number) => {
+    return fetchAdminAPI(`/admin/users/${userId}`, {
+      method: 'DELETE',
+    })
+  },
+
+  // 회원 일괄 삭제
+  deleteUsers: async (userIds: number[]) => {
+    return fetchAdminAPI('/admin/users/bulk-delete', {
+      method: 'POST',
+      body: JSON.stringify({ user_ids: userIds }),
+    })
+  },
+
+  // 도토리 지급
+  grantDotori: async (userId: number, amount: number, reason?: string) => {
+    return fetchAdminAPI('/admin/dotori/grant', {
+      method: 'POST',
+      body: JSON.stringify({ user_id: userId, amount, reason }),
     })
   },
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { adminAPI, removeAdminToken } from '@/lib/api'
-import { Lock, Users, MessageCircle, Calendar, UserPlus, Building2, Heart, AlertTriangle, ChevronLeft, ChevronRight, Search, LogOut, Bell, Send, Image, X, Upload, Trash2 } from 'lucide-react'
+import { Lock, Users, MessageCircle, Calendar, UserPlus, Building2, Heart, AlertTriangle, ChevronLeft, ChevronRight, Search, LogOut, Bell, Send, Image, X, Upload, Trash2, Nut } from 'lucide-react'
 
 interface Stats {
   total_users: number
@@ -140,6 +140,17 @@ export default function AdminPage() {
   const [users, setUsers] = useState<UserSummary[]>([])
   const [selectedUser, setSelectedUser] = useState<UserDetail | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+
+  // 선택 삭제 관련 상태
+  const [selectedUserIds, setSelectedUserIds] = useState<number[]>([])
+  const [isDeleting, setIsDeleting] = useState(false)
+
+  // 도토리 지급 관련 상태
+  const [showDotoriModal, setShowDotoriModal] = useState(false)
+  const [dotoriTargetUser, setDotoriTargetUser] = useState<UserSummary | null>(null)
+  const [dotoriAmount, setDotoriAmount] = useState('')
+  const [dotoriReason, setDotoriReason] = useState('')
+  const [isGrantingDotori, setIsGrantingDotori] = useState(false)
 
   // 푸시 알림 관련 상태
   const [showPushModal, setShowPushModal] = useState(false)
@@ -281,6 +292,66 @@ export default function AdminPage() {
       alert('푸시 알림 전송 중 오류가 발생했습니다.')
     } finally {
       setIsSendingPush(false)
+    }
+  }
+
+  // 선택 삭제
+  const toggleSelectUser = (userId: number) => {
+    setSelectedUserIds(prev =>
+      prev.includes(userId) ? prev.filter(id => id !== userId) : [...prev, userId]
+    )
+  }
+
+  const toggleSelectAll = () => {
+    if (selectedUserIds.length === filteredUsers.length) {
+      setSelectedUserIds([])
+    } else {
+      setSelectedUserIds(filteredUsers.map(u => u.id))
+    }
+  }
+
+  const handleDeleteSelected = async () => {
+    if (selectedUserIds.length === 0) return
+    if (!confirm(`선택한 ${selectedUserIds.length}명의 회원과 관련된 모든 데이터를 삭제합니다.\n\n정말 삭제하시겠습니까?`)) return
+
+    setIsDeleting(true)
+    try {
+      await adminAPI.deleteUsers(selectedUserIds)
+      alert(`${selectedUserIds.length}명의 회원이 삭제되었습니다.`)
+      setSelectedUserIds([])
+      loadData()
+    } catch (err: any) {
+      alert('회원 삭제 실패: ' + (err.message || '알 수 없는 오류'))
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  // 도토리 지급
+  const openDotoriModal = (user: UserSummary) => {
+    setDotoriTargetUser(user)
+    setDotoriAmount('')
+    setDotoriReason('')
+    setShowDotoriModal(true)
+  }
+
+  const handleGrantDotori = async () => {
+    if (!dotoriTargetUser || !dotoriAmount) return
+    const amount = parseInt(dotoriAmount)
+    if (isNaN(amount) || amount < 1) {
+      alert('1개 이상 입력하세요.')
+      return
+    }
+
+    setIsGrantingDotori(true)
+    try {
+      await adminAPI.grantDotori(dotoriTargetUser.id, amount, dotoriReason || undefined)
+      alert(`${dotoriTargetUser.name}님에게 도토리 ${amount}개를 지급했습니다.`)
+      setShowDotoriModal(false)
+    } catch (err: any) {
+      alert('도토리 지급 실패: ' + (err.message || '알 수 없는 오류'))
+    } finally {
+      setIsGrantingDotori(false)
     }
   }
 
@@ -997,12 +1068,37 @@ export default function AdminPage() {
         </div>
       </div>
 
+      {/* 선택 삭제 바 */}
+      {selectedUserIds.length > 0 && (
+        <div className="bg-red-900/30 border border-red-700/50 rounded-xl p-4 flex items-center justify-between">
+          <span className="text-red-400 text-sm font-medium">
+            {selectedUserIds.length}명 선택됨
+          </span>
+          <button
+            onClick={handleDeleteSelected}
+            disabled={isDeleting}
+            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors text-sm font-medium"
+          >
+            <Trash2 className="w-4 h-4" />
+            {isDeleting ? '삭제 중...' : '선택 회원 삭제'}
+          </button>
+        </div>
+      )}
+
       {/* 유저 목록 */}
       <div className="bg-gray-800 rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="text-gray-400 border-b border-gray-700 text-sm">
+                <th className="py-4 px-4 w-10">
+                  <input
+                    type="checkbox"
+                    checked={filteredUsers.length > 0 && selectedUserIds.length === filteredUsers.length}
+                    onChange={toggleSelectAll}
+                    className="w-4 h-4 rounded accent-primary cursor-pointer"
+                  />
+                </th>
                 <th className="text-left py-4 px-4">ID</th>
                 <th className="text-left py-4 px-4">학번</th>
                 <th className="text-left py-4 px-4">이름</th>
@@ -1016,7 +1112,15 @@ export default function AdminPage() {
             </thead>
             <tbody>
               {filteredUsers.map(user => (
-                <tr key={user.id} className="border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors">
+                <tr key={user.id} className={`border-b border-gray-700/50 hover:bg-gray-700/30 transition-colors ${selectedUserIds.includes(user.id) ? 'bg-red-900/10' : ''}`}>
+                  <td className="py-3 px-4">
+                    <input
+                      type="checkbox"
+                      checked={selectedUserIds.includes(user.id)}
+                      onChange={() => toggleSelectUser(user.id)}
+                      className="w-4 h-4 rounded accent-primary cursor-pointer"
+                    />
+                  </td>
                   <td className="py-3 px-4 text-gray-400">{user.id}</td>
                   <td className="py-3 px-4">{user.student_id}</td>
                   <td className="py-3 px-4 font-medium">{user.name}</td>
@@ -1033,6 +1137,13 @@ export default function AdminPage() {
                   </td>
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => openDotoriModal(user)}
+                        className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 transition-colors"
+                        title="도토리 지급"
+                      >
+                        <Nut className="w-4 h-4" />
+                      </button>
                       <button
                         onClick={() => openPushModal('single', user)}
                         className="p-1.5 rounded-lg bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 transition-colors"
@@ -1060,6 +1171,66 @@ export default function AdminPage() {
           </div>
         )}
       </div>
+
+      {/* 도토리 지급 모달 */}
+      {showDotoriModal && dotoriTargetUser && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-md shadow-xl">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Nut className="w-5 h-5 text-amber-400" />
+                도토리 지급
+              </h3>
+              <button onClick={() => setShowDotoriModal(false)} className="text-gray-400 hover:text-white">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-gray-300 text-sm mb-4">
+              <span className="font-semibold text-white">{dotoriTargetUser.name}</span>
+              <span className="text-gray-400 ml-1">({dotoriTargetUser.student_id})</span>
+              님에게 도토리를 지급합니다.
+            </p>
+
+            <div className="flex flex-col gap-3 mb-4">
+              <input
+                type="tel"
+                inputMode="numeric"
+                placeholder="지급할 개수"
+                value={dotoriAmount}
+                onChange={(e) => setDotoriAmount(e.target.value.replace(/[^0-9]/g, ''))}
+                className="w-full px-4 py-3 rounded-xl bg-gray-700 text-white placeholder-gray-400 border border-gray-600 focus:border-amber-500 focus:outline-none"
+                style={{ fontSize: '16px' }}
+              />
+              <input
+                type="text"
+                placeholder="사유 (선택)"
+                value={dotoriReason}
+                onChange={(e) => setDotoriReason(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl bg-gray-700 text-white placeholder-gray-400 border border-gray-600 focus:border-amber-500 focus:outline-none"
+                style={{ fontSize: '16px' }}
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDotoriModal(false)}
+                className="flex-1 py-3 rounded-xl bg-gray-700 text-white hover:bg-gray-600 transition-colors"
+                disabled={isGrantingDotori}
+              >
+                취소
+              </button>
+              <button
+                onClick={handleGrantDotori}
+                disabled={isGrantingDotori || !dotoriAmount}
+                className="flex-1 py-3 rounded-xl bg-amber-500 text-white font-semibold hover:bg-amber-600 disabled:opacity-50 transition-colors"
+              >
+                {isGrantingDotori ? '지급 중...' : '지급하기'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
