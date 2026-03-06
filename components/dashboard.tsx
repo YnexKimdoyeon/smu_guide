@@ -37,6 +37,9 @@ interface DashboardProps {
   onLogout: () => void
 }
 
+// 앱스토어 심사용: 숨길 앱 ID 목록 (심사 통과 후 빈 배열로 변경)
+const hiddenApps: AppId[] = ['chat']
+
 const apps: { id: AppId; label: string; icon: typeof Calendar; color: string; bgColor: string }[] = [
   { id: 'timetable', label: '내 시간표', icon: Calendar, color: '#3B82F6', bgColor: '#DBEAFE' },
   { id: 'elearning', label: 'E-러닝', icon: GraduationCap, color: '#6366F1', bgColor: '#E0E7FF' },
@@ -47,7 +50,7 @@ const apps: { id: AppId; label: string; icon: typeof Calendar; color: string; bg
   { id: 'chat', label: '익명 채팅', icon: MessageCircle, color: '#0EA5E9', bgColor: '#E0F2FE' },
   { id: 'commute', label: '등하교 메이트', icon: MapPin, color: '#10B981', bgColor: '#D1FAE5' },
   { id: 'friends', label: '친구 관리', icon: Users, color: '#EC4899', bgColor: '#FCE7F3' },
-]
+].filter(app => !hiddenApps.includes(app.id))
 
 export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
   const [showWithdrawModal, setShowWithdrawModal] = useState(false)
