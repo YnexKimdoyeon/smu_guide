@@ -129,9 +129,13 @@ export default function Home() {
       if (sunmoonSubApps.includes(screen) && prevScreen === 'sunmoon-info') {
         setCurrentScreen('sunmoon-info')
         currentScreenRef.current = 'sunmoon-info'
+        // 선문대 정보도 하위 화면이므로 히스토리 유지
+        history.pushState({ screen: 'sunmoon-info' }, '')
       } else {
         setCurrentScreen('dashboard')
         currentScreenRef.current = 'dashboard'
+        // 대시보드에서 다음 뒤로가기를 잡을 수 있도록 히스토리 추가
+        history.pushState({ screen: 'dashboard' }, '')
       }
       setPreviousScreen(null)
       previousScreenRef.current = null
@@ -187,8 +191,8 @@ export default function Home() {
     }
     setPreviousScreen(null)
     previousScreenRef.current = null
-    // UI 뒤로가기 버튼 클릭 시에도 히스토리 정리
-    history.back()
+    // UI 버튼 클릭 시 현재 히스토리를 교체 (popstate 발생 안 함)
+    history.replaceState({ screen: currentScreenRef.current }, '')
   }
 
   if (isLoading) {
