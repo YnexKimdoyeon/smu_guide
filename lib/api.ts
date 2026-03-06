@@ -67,7 +67,10 @@ async function fetchAPI(endpoint: string, options: RequestInit = {}) {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: '요청 실패' }))
-    throw new Error(error.detail || '요청 실패')
+    const message = response.status === 401
+      ? `401: ${error.detail || '인증 만료'}`
+      : (error.detail || '요청 실패')
+    throw new Error(message)
   }
 
   // 204 No Content

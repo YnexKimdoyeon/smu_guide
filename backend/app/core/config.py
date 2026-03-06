@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "*"  # 콤마로 구분: "https://example.com,https://app.example.com"
 
     # Rate Limiting
-    RATE_LIMIT_PER_MINUTE: int = 60
+    RATE_LIMIT_PER_MINUTE: int = 200
 
     # Swing2App Push Notification
     SWING_APP_ID: str = ""

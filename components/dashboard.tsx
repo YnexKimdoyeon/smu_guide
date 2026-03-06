@@ -122,19 +122,20 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
 
   // 배너/팝업 로드
   useEffect(() => {
+    let cancelled = false
     const loadBanners = async () => {
       try {
         const [bannerData, popupData] = await Promise.all([
           bannerAPI.getMainBanner(),
           bannerAPI.getPopup()
         ])
+        if (cancelled) return
 
         if (bannerData.is_active) {
           setMainBanner(bannerData)
         }
 
         if (popupData.is_active) {
-          // 오늘 하루 안보기 체크
           const dismissedDate = localStorage.getItem('popup_dismissed_date')
           const today = new Date().toDateString()
 
@@ -148,6 +149,7 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
       }
     }
     loadBanners()
+    return () => { cancelled = true }
   }, [])
 
   const handleDismissPopupToday = () => {
@@ -162,18 +164,19 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
 
   // 알림 배지 조회
   useEffect(() => {
+    let cancelled = false
     const fetchBadges = async () => {
       try {
         const data = await notificationAPI.getBadges()
-        setBadges(data)
+        if (!cancelled) setBadges(data)
       } catch {
         // 무시
       }
     }
     fetchBadges()
-    // 30초마다 배지 갱신
-    const interval = setInterval(fetchBadges, 30000)
-    return () => clearInterval(interval)
+    // 60초마다 배지 갱신
+    const interval = setInterval(fetchBadges, 60000)
+    return () => { cancelled = true; clearInterval(interval) }
   }, [])
 
   const handleOpenApp = async (appId: AppId) => {
@@ -222,13 +225,16 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
 
   // 도토리 정보 로드 + 자동 출석 체크
   useEffect(() => {
+    let cancelled = false
     const loadDotoriInfo = async () => {
       try {
         const info = await dotoriAPI.getInfo()
+        if (cancelled) return
 
         if (info.can_attend_today) {
           try {
             const attendResult = await dotoriAPI.checkAttendance()
+            if (cancelled) return
             if (attendResult.success) {
               setDotoriInfo({
                 ...info,
@@ -241,29 +247,35 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
             }
           } catch { /* 출석 실패해도 info는 표시 */ }
         }
-        setDotoriInfo(info)
+        if (!cancelled) setDotoriInfo(info)
       } catch { /* 무시 */ }
     }
     loadDotoriInfo()
+    return () => { cancelled = true }
   }, [])
 
   // 랭킹 조회 (독립 실행)
   useEffect(() => {
+    let cancelled = false
     const loadRanking = async () => {
       try {
         const rankingData = await dotoriAPI.getRanking()
+        if (cancelled) return
         setRankings(rankingData.rankings || [])
         setMyDeptRanking(rankingData.my_department || null)
       } catch { /* 무시 */ }
     }
     loadRanking()
+    return () => { cancelled = true }
   }, [])
 
   // 읽지 않은 선물 확인 (독립 실행)
   useEffect(() => {
+    let cancelled = false
     const loadGifts = async () => {
       try {
         const giftsData = await dotoriAPI.getUnreadGifts()
+        if (cancelled) return
         if (giftsData.gifts && giftsData.gifts.length > 0) {
           setReceivedGifts(giftsData.gifts)
           setCurrentGiftIndex(0)
@@ -272,6 +284,7 @@ export function Dashboard({ user, onOpenApp, onLogout }: DashboardProps) {
       } catch { /* 무시 */ }
     }
     loadGifts()
+    return () => { cancelled = true }
   }, [])
 
   // 상점에서 구매 완료 시 도토리 정보 갱신

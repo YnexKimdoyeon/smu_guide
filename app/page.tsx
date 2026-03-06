@@ -48,8 +48,15 @@ export default function Home() {
           })
           setCurrentScreen('dashboard')
           currentScreenRef.current = 'dashboard'
-        } catch {
-          removeToken()
+        } catch (error: any) {
+          // 401(인증 만료)만 토큰 삭제, 네트워크 에러는 무시하고 재시도 가능하게
+          if (error?.message?.includes('401') || error?.message?.includes('인증') || error?.message?.includes('토큰')) {
+            removeToken()
+          } else {
+            // 네트워크 에러 등 → 토큰 유지하고 대시보드 진입 시도
+            setCurrentScreen('dashboard')
+            currentScreenRef.current = 'dashboard'
+          }
         }
       }
       setIsLoading(false)
