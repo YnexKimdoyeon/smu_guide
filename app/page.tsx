@@ -24,6 +24,13 @@ type Screen = 'login' | 'dashboard' | AppId
 // 선문대 정보 하위 앱들
 const sunmoonSubApps: Screen[] = ['academic-calendar', 'announcements', 'phonebook', 'cafeteria']
 
+// 히스토리 버퍼를 충분히 쌓아서 웹뷰 이탈 방지
+function pushHistoryBuffer(screen: string, count = 5) {
+  for (let i = 0; i < count; i++) {
+    history.pushState({ screen, buffer: true }, '')
+  }
+}
+
 
 export default function Home() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('login')
@@ -50,9 +57,9 @@ export default function Home() {
           })
           setCurrentScreen('dashboard')
           currentScreenRef.current = 'dashboard'
-          // 히스토리 베이스 설정 + 뒤로가기를 잡기 위한 더미 엔트리 추가
+          // 히스토리 버퍼를 충분히 쌓아서 뒤로가기 시 웹뷰 이탈 방지
           history.replaceState({ screen: 'dashboard' }, '')
-          history.pushState({ screen: 'dashboard' }, '')
+          pushHistoryBuffer('dashboard')
         } catch {
           removeToken()
         }
@@ -70,8 +77,8 @@ export default function Home() {
 
       // 대시보드나 로그인에서 뒤로가기 → 종료 확인 팝업
       if (screen === 'dashboard' || screen === 'login') {
-        // 히스토리를 다시 쌓아서 다음 뒤로가기도 잡을 수 있게
-        history.pushState({ screen }, '')
+        // 히스토리 버퍼 다시 채우기
+        pushHistoryBuffer(screen)
         setShowExitDialog(true)
         return
       }
@@ -80,13 +87,11 @@ export default function Home() {
       if (sunmoonSubApps.includes(screen) && prevScreen === 'sunmoon-info') {
         setCurrentScreen('sunmoon-info')
         currentScreenRef.current = 'sunmoon-info'
-        // 선문대 정보도 하위 화면이므로 히스토리 유지
-        history.pushState({ screen: 'sunmoon-info' }, '')
+        pushHistoryBuffer('sunmoon-info')
       } else {
         setCurrentScreen('dashboard')
         currentScreenRef.current = 'dashboard'
-        // 대시보드에서 다음 뒤로가기를 잡을 수 있도록 히스토리 추가
-        history.pushState({ screen: 'dashboard' }, '')
+        pushHistoryBuffer('dashboard')
       }
       setPreviousScreen(null)
       previousScreenRef.current = null
@@ -111,7 +116,7 @@ export default function Home() {
       setCurrentScreen('dashboard')
       currentScreenRef.current = 'dashboard'
       history.replaceState({ screen: 'dashboard' }, '')
-      history.pushState({ screen: 'dashboard' }, '')
+      pushHistoryBuffer('dashboard')
       return { success: true }
     } catch (error) {
       return { success: false, error: (error as Error).message }
