@@ -33,6 +33,7 @@ interface UserDetail {
     name: string
     department: string
     profile_image: string | null
+    dotori_point: number
     created_at: string | null
     updated_at: string | null
   }
@@ -151,6 +152,10 @@ export default function AdminPage() {
   const [dotoriAmount, setDotoriAmount] = useState('')
   const [dotoriReason, setDotoriReason] = useState('')
   const [isGrantingDotori, setIsGrantingDotori] = useState(false)
+
+  // 도토리 설정 (유저 상세)
+  const [dotoriEditValue, setDotoriEditValue] = useState('')
+  const [isSettingDotori, setIsSettingDotori] = useState(false)
 
   // 푸시 알림 관련 상태
   const [showPushModal, setShowPushModal] = useState(false)
@@ -520,6 +525,52 @@ export default function AdminPage() {
             <div>
               <span className="text-gray-400">최근 수정:</span>
               <span className="ml-2">{formatDate(selectedUser.user.updated_at)}</span>
+            </div>
+          </div>
+
+          {/* 도토리 설정 */}
+          <div className="mt-4 pt-4 border-t border-gray-700">
+            <div className="flex items-center gap-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Nut className="w-4 h-4 text-amber-400" />
+                <span className="text-gray-400 text-sm">도토리:</span>
+                <span className="text-amber-400 font-bold">{selectedUser.user.dotori_point}개</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="tel"
+                  inputMode="numeric"
+                  placeholder="변경할 값"
+                  value={dotoriEditValue}
+                  onChange={(e) => setDotoriEditValue(e.target.value.replace(/[^0-9]/g, ''))}
+                  className="w-28 px-3 py-1.5 rounded-lg bg-gray-700 text-white text-sm border border-gray-600 focus:border-amber-500 focus:outline-none"
+                  style={{ fontSize: '16px' }}
+                />
+                <button
+                  onClick={async () => {
+                    const val = parseInt(dotoriEditValue)
+                    if (isNaN(val) || val < 0) { alert('0 이상의 값을 입력하세요.'); return }
+                    setIsSettingDotori(true)
+                    try {
+                      const result = await adminAPI.setDotori(selectedUser.user.id, val)
+                      alert(result.message)
+                      setSelectedUser({
+                        ...selectedUser,
+                        user: { ...selectedUser.user, dotori_point: val }
+                      })
+                      setDotoriEditValue('')
+                    } catch (err: any) {
+                      alert('실패: ' + (err.message || '알 수 없는 오류'))
+                    } finally {
+                      setIsSettingDotori(false)
+                    }
+                  }}
+                  disabled={isSettingDotori || !dotoriEditValue}
+                  className="px-3 py-1.5 rounded-lg bg-amber-500 text-white text-sm font-medium hover:bg-amber-600 disabled:opacity-50 transition-colors"
+                >
+                  {isSettingDotori ? '...' : '설정'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

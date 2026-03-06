@@ -336,6 +336,7 @@ async def get_user_detail(
             "name": user.name,
             "department": user.department,
             "profile_image": user.profile_image,
+            "dotori_point": user.dotori_point or 0,
             "created_at": user.created_at.isoformat() if user.created_at else None,
             "updated_at": user.updated_at.isoformat() if user.updated_at else None,
         },
@@ -535,7 +536,7 @@ async def grant_dotori(
     db: Session = Depends(get_db),
     _: bool = Depends(verify_admin_token)
 ):
-    """관리자가 유저에게 도토리 지급"""
+    """관리자가 유저에게 도토리 지급 (추가)"""
     if request.amount < 1:
         raise HTTPException(status_code=400, detail="1개 이상 지급해야 합니다.")
 
@@ -551,4 +552,35 @@ async def grant_dotori(
         "message": f"{user.name}님에게 도토리 {request.amount}개를 지급했습니다.",
         "new_total": user.dotori_point,
         "reason": request.reason
+    }
+
+
+class DotoriSetRequest(BaseModel):
+    user_id: int
+    amount: int
+
+
+@router.post("/dotori/set")
+async def set_dotori(
+    request: DotoriSetRequest,
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_admin_token)
+):
+    """관리자가 유저의 도토리를 임의 값으로 설정"""
+    if request.amount < 0:
+        raise HTTPException(status_code=400, detail="0 이상의 값을 입력하세요.")
+
+    user = db.query(User).filter(User.id == request.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="유저를 찾을 수 없습니다.")
+
+    old_amount = user.dotori_point or 0
+    user.dotori_point = request.amount
+    db.commit()
+
+    return {
+        "success": True,
+        "message": f"{user.name}님의 도토리를 {old_amount} → {request.amount}개로 변경했습니다.",
+        "old_total": old_amount,
+        "new_total": request.amount
     }

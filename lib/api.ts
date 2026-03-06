@@ -884,11 +884,19 @@ export const adminAPI = {
     })
   },
 
-  // 도토리 지급
+  // 도토리 지급 (추가)
   grantDotori: async (userId: number, amount: number, reason?: string) => {
     return fetchAdminAPI('/admin/dotori/grant', {
       method: 'POST',
       body: JSON.stringify({ user_id: userId, amount, reason }),
+    })
+  },
+
+  // 도토리 설정 (덮어쓰기)
+  setDotori: async (userId: number, amount: number) => {
+    return fetchAdminAPI('/admin/dotori/set', {
+      method: 'POST',
+      body: JSON.stringify({ user_id: userId, amount }),
     })
   },
 
