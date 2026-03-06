@@ -57,6 +57,32 @@ export default function Home() {
     checkAuth()
   }, [])
 
+  // 안드로이드 뒤로가기: 하위앱 → 대시보드 네비게이션
+  useEffect(() => {
+    const handlePopState = () => {
+      const screen = currentScreenRef.current
+      const prevScreen = previousScreenRef.current
+
+      // 대시보드나 로그인에서는 웹뷰가 알아서 처리 (앱 종료)
+      if (screen === 'dashboard' || screen === 'login') return
+
+      // 하위 화면에서 뒤로가기 → 대시보드 또는 선문대 정보로
+      if (sunmoonSubApps.includes(screen) && prevScreen === 'sunmoon-info') {
+        setCurrentScreen('sunmoon-info')
+        currentScreenRef.current = 'sunmoon-info'
+        history.pushState(null, '')
+      } else {
+        setCurrentScreen('dashboard')
+        currentScreenRef.current = 'dashboard'
+        history.pushState(null, '')
+      }
+      setPreviousScreen(null)
+      previousScreenRef.current = null
+    }
+
+    window.addEventListener('popstate', handlePopState)
+    return () => window.removeEventListener('popstate', handlePopState)
+  }, [])
 
   const handleLogin = async (studentId: string, password: string) => {
     try {
@@ -87,18 +113,11 @@ export default function Home() {
     previousScreenRef.current = currentScreen
     setCurrentScreen(appId)
     currentScreenRef.current = appId
+    history.pushState(null, '')
   }
 
   const handleBack = () => {
-    if (sunmoonSubApps.includes(currentScreen) && previousScreen === 'sunmoon-info') {
-      setCurrentScreen('sunmoon-info')
-      currentScreenRef.current = 'sunmoon-info'
-    } else {
-      setCurrentScreen('dashboard')
-      currentScreenRef.current = 'dashboard'
-    }
-    setPreviousScreen(null)
-    previousScreenRef.current = null
+    history.back()
   }
 
   if (isLoading) {
@@ -153,6 +172,7 @@ export default function Home() {
             previousScreenRef.current = 'sunmoon-info'
             setCurrentScreen(subAppId)
             currentScreenRef.current = subAppId
+            history.pushState(null, '')
           }}
         />
       )}
