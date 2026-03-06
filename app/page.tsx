@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { LoginScreen } from '@/components/login-screen'
 import { Dashboard, type AppId } from '@/components/dashboard'
 import { TimetableScreen } from '@/components/timetable-screen'
@@ -30,15 +30,8 @@ export default function Home() {
   const [previousScreen, setPreviousScreen] = useState<Screen | null>(null)
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
-  const [showExitDialog, setShowExitDialog] = useState(false)
-  // popstate 핸들러 내에서 최신 state를 참조하기 위한 ref
   const currentScreenRef = useRef<Screen>('login')
   const previousScreenRef = useRef<Screen | null>(null)
-
-  // 해시로 화면 이동 (웹뷰 호환 브라우저 히스토리 생성)
-  const navigateHash = useCallback((screen: Screen) => {
-    window.location.hash = '#' + screen
-  }, [])
 
   // 앱 시작 시 토큰 확인
   useEffect(() => {
@@ -55,8 +48,6 @@ export default function Home() {
           })
           setCurrentScreen('dashboard')
           currentScreenRef.current = 'dashboard'
-          // 해시 추가 (replace 아닌 push로 뒤로가기 잡을 엔트리 유지)
-          window.location.hash = '#dashboard'
         } catch {
           removeToken()
         }
@@ -66,68 +57,6 @@ export default function Home() {
     checkAuth()
   }, [])
 
-  // hashchange 이벤트 (안드로이드 뒤로가기) 처리
-  useEffect(() => {
-    const handleHashChange = () => {
-      const hash = window.location.hash.replace('#', '')
-      const screen = currentScreenRef.current
-      const prevScreen = previousScreenRef.current
-
-      // 해시가 비어있거나 현재 화면보다 상위로 간 경우 = 뒤로가기
-      if (!hash || hash === '') {
-        // 대시보드나 로그인에서 뒤로가기 → 종료 확인 팝업
-        if (screen === 'dashboard' || screen === 'login') {
-          // 해시 다시 push (replace 아님 - 다음 뒤로가기도 잡기 위해)
-          window.location.hash = '#' + screen
-          setShowExitDialog(true)
-          return
-        }
-
-        // 하위 화면에서 뒤로가기
-        if (sunmoonSubApps.includes(screen) && prevScreen === 'sunmoon-info') {
-          setCurrentScreen('sunmoon-info')
-          currentScreenRef.current = 'sunmoon-info'
-          window.location.hash = '#sunmoon-info'
-        } else {
-          setCurrentScreen('dashboard')
-          currentScreenRef.current = 'dashboard'
-          window.location.hash = '#dashboard'
-        }
-        setPreviousScreen(null)
-        previousScreenRef.current = null
-        return
-      }
-
-      // 해시가 dashboard인데 현재 하위화면인 경우 = 뒤로가기
-      if (hash === 'dashboard' && screen !== 'dashboard' && screen !== 'login') {
-        if (sunmoonSubApps.includes(screen) && prevScreen === 'sunmoon-info') {
-          setCurrentScreen('sunmoon-info')
-          currentScreenRef.current = 'sunmoon-info'
-          window.location.replace('#sunmoon-info')
-        } else {
-          setCurrentScreen('dashboard')
-          currentScreenRef.current = 'dashboard'
-        }
-        setPreviousScreen(null)
-        previousScreenRef.current = null
-        return
-      }
-
-      // 해시가 sunmoon-info인데 현재 하위앱인 경우
-      if (hash === 'sunmoon-info' && sunmoonSubApps.includes(screen)) {
-        setCurrentScreen('sunmoon-info')
-        currentScreenRef.current = 'sunmoon-info'
-        setPreviousScreen(null)
-        previousScreenRef.current = null
-        return
-      }
-    }
-
-    window.addEventListener('hashchange', handleHashChange)
-    return () => {
-      window.removeEventListener('hashchange', handleHashChange)
-    }
-  }, [])
 
   const handleLogin = async (studentId: string, password: string) => {
     try {
@@ -141,7 +70,6 @@ export default function Home() {
       })
       setCurrentScreen('dashboard')
       currentScreenRef.current = 'dashboard'
-      window.location.hash = '#dashboard'
       return { success: true }
     } catch (error) {
       return { success: false, error: (error as Error).message }
@@ -159,27 +87,19 @@ export default function Home() {
     previousScreenRef.current = currentScreen
     setCurrentScreen(appId)
     currentScreenRef.current = appId
-    // 해시 변경으로 브라우저 히스토리 생성
-    navigateHash(appId)
   }
 
   const handleBack = () => {
-    // UI 뒤로가기 버튼 → history.back()으로 hashchange 발생시킴
-    history.back()
-  }
-
-  const handleExitApp = useCallback(() => {
-    setShowExitDialog(false)
-    if (typeof window !== 'undefined') {
-      const swingPlugin = (window as any).swingWebViewPlugin
-      if (swingPlugin?.app?.exit?.doAppExit) {
-        swingPlugin.app.exit.doAppExit()
-      } else {
-        // 웹뷰 플러그인이 없는 경우 (브라우저 테스트 등)
-        window.close()
-      }
+    if (sunmoonSubApps.includes(currentScreen) && previousScreen === 'sunmoon-info') {
+      setCurrentScreen('sunmoon-info')
+      currentScreenRef.current = 'sunmoon-info'
+    } else {
+      setCurrentScreen('dashboard')
+      currentScreenRef.current = 'dashboard'
     }
-  }, [])
+    setPreviousScreen(null)
+    previousScreenRef.current = null
+  }
 
   if (isLoading) {
     return (
@@ -233,7 +153,6 @@ export default function Home() {
             previousScreenRef.current = 'sunmoon-info'
             setCurrentScreen(subAppId)
             currentScreenRef.current = subAppId
-            navigateHash(subAppId)
           }}
         />
       )}
@@ -255,30 +174,6 @@ export default function Home() {
         <ShuttleScreen onBack={handleBack} />
       )}
 
-      {/* 앱 종료 확인 팝업 */}
-      {showExitDialog && (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50">
-          <div className="bg-white rounded-2xl p-6 mx-8 max-w-sm w-full shadow-xl">
-            <p className="text-center text-gray-800 text-lg font-medium mb-6">
-              앱을 종료하시겠습니까?
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowExitDialog(false)}
-                className="flex-1 py-3 rounded-xl bg-gray-100 text-gray-600 font-medium text-base"
-              >
-                취소
-              </button>
-              <button
-                onClick={handleExitApp}
-                className="flex-1 py-3 rounded-xl bg-red-500 text-white font-medium text-base"
-              >
-                종료
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
