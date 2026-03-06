@@ -21,6 +21,8 @@ from ..models.commute import CommuteSchedule, CommuteGroup, CommuteGroupMember, 
 from ..models.club import Club, ClubApplication
 from ..models.meeting import Meeting, MeetingApplication
 from ..models.block import UserReport, UserBlock
+from ..models.notification import AppLastViewed
+from ..models.dotori import DotoriGift
 from ..services.push import send_push_notification
 
 router = APIRouter(prefix="/admin", tags=["관리자"])
@@ -411,4 +413,142 @@ async def send_push_to_all_users(
     return {
         "success": result.get("success", False),
         "response": result.get("response", {})
+    }
+
+
+def delete_user_and_data(db: Session, user_id: int):
+    """유저와 관련된 모든 데이터 삭제"""
+    # 시간표
+    db.query(Schedule).filter(Schedule.user_id == user_id).delete()
+    # 채팅 메시지 & 방 멤버
+    db.query(ChatMessage).filter(ChatMessage.user_id == user_id).delete()
+    db.query(ChatRoomMember).filter(ChatRoomMember.user_id == user_id).delete()
+    # 랜덤 채팅
+    db.query(RandomChatMessage).filter(RandomChatMessage.user_id == user_id).delete()
+    rooms_as_1 = db.query(RandomChatRoom).filter(RandomChatRoom.user1_id == user_id).all()
+    rooms_as_2 = db.query(RandomChatRoom).filter(RandomChatRoom.user2_id == user_id).all()
+    for room in rooms_as_1 + rooms_as_2:
+        db.query(RandomChatMessage).filter(RandomChatMessage.room_id == room.id).delete()
+        db.delete(room)
+    # 친구
+    db.query(Friend).filter((Friend.user_id == user_id) | (Friend.friend_id == user_id)).delete()
+    # 등하교
+    db.query(CommuteChat).filter(CommuteChat.user_id == user_id).delete()
+    db.query(CommuteGroupMember).filter(CommuteGroupMember.user_id == user_id).delete()
+    db.query(CommuteSchedule).filter(CommuteSchedule.user_id == user_id).delete()
+    # 동아리
+    clubs = db.query(Club).filter(Club.user_id == user_id).all()
+    for club in clubs:
+        db.query(ClubApplication).filter(ClubApplication.club_id == club.id).delete()
+        db.delete(club)
+    db.query(ClubApplication).filter(ClubApplication.user_id == user_id).delete()
+    # 과팅
+    meetings = db.query(Meeting).filter(Meeting.user_id == user_id).all()
+    for meeting in meetings:
+        db.query(MeetingApplication).filter(MeetingApplication.meeting_id == meeting.id).delete()
+        db.delete(meeting)
+    db.query(MeetingApplication).filter(MeetingApplication.user_id == user_id).delete()
+    # 신고 & 차단
+    db.query(UserReport).filter((UserReport.reporter_id == user_id) | (UserReport.reported_user_id == user_id)).delete()
+    db.query(UserBlock).filter((UserBlock.user_id == user_id) | (UserBlock.blocked_user_id == user_id)).delete()
+    # 알림 추적
+    db.query(AppLastViewed).filter(AppLastViewed.user_id == user_id).delete()
+    # 도토리 선물
+    db.query(DotoriGift).filter((DotoriGift.sender_id == user_id) | (DotoriGift.receiver_id == user_id)).delete()
+    # 유저 삭제
+    db.query(User).filter(User.id == user_id).delete()
+
+
+@router.delete("/users/{user_id}")
+async def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_admin_token)
+):
+    """유저 삭제 (관련 데이터 전체 삭제)"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="유저를 찾을 수 없습니다.")
+
+    name = user.name
+    try:
+        delete_user_and_data(db, user_id)
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"삭제 실패: {str(e)}")
+
+    return {"success": True, "message": f"{name}님의 계정과 모든 데이터가 삭제되었습니다."}
+
+
+class BulkDeleteRequest(BaseModel):
+    user_ids: List[int]
+
+
+@router.post("/users/bulk-delete")
+async def bulk_delete_users(
+    request: BulkDeleteRequest,
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_admin_token)
+):
+    """유저 일괄 삭제 (관련 데이터 전체 삭제)"""
+    if not request.user_ids:
+        raise HTTPException(status_code=400, detail="삭제할 유저를 선택하세요.")
+
+    deleted_count = 0
+    errors = []
+
+    for user_id in request.user_ids:
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            errors.append(f"ID {user_id}: 유저를 찾을 수 없음")
+            continue
+        try:
+            delete_user_and_data(db, user_id)
+            deleted_count += 1
+        except Exception as e:
+            errors.append(f"ID {user_id}: {str(e)}")
+
+    try:
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"삭제 커밋 실패: {str(e)}")
+
+    return {
+        "success": True,
+        "deleted_count": deleted_count,
+        "errors": errors if errors else None,
+        "message": f"{deleted_count}명의 회원이 삭제되었습니다."
+    }
+
+
+class DotoriGrantRequest(BaseModel):
+    user_id: int
+    amount: int
+    reason: Optional[str] = None
+
+
+@router.post("/dotori/grant")
+async def grant_dotori(
+    request: DotoriGrantRequest,
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_admin_token)
+):
+    """관리자가 유저에게 도토리 지급"""
+    if request.amount < 1:
+        raise HTTPException(status_code=400, detail="1개 이상 지급해야 합니다.")
+
+    user = db.query(User).filter(User.id == request.user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="유저를 찾을 수 없습니다.")
+
+    user.dotori_point = (user.dotori_point or 0) + request.amount
+    db.commit()
+
+    return {
+        "success": True,
+        "message": f"{user.name}님에게 도토리 {request.amount}개를 지급했습니다.",
+        "new_total": user.dotori_point,
+        "reason": request.reason
     }
