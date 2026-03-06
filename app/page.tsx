@@ -83,8 +83,9 @@ export default function Home() {
           })
           setCurrentScreen('dashboard')
           currentScreenRef.current = 'dashboard'
-          // 로그인 상태면 대시보드를 히스토리 베이스로 설정
+          // 히스토리 베이스 설정 + 뒤로가기를 잡기 위한 더미 엔트리 추가
           history.replaceState({ screen: 'dashboard' }, '')
+          history.pushState({ screen: 'dashboard' }, '')
         } catch {
           removeToken()
         }
@@ -159,6 +160,9 @@ export default function Home() {
         department: data.department,
       })
       setCurrentScreen('dashboard')
+      currentScreenRef.current = 'dashboard'
+      history.replaceState({ screen: 'dashboard' }, '')
+      history.pushState({ screen: 'dashboard' }, '')
       return { success: true }
     } catch (error) {
       return { success: false, error: (error as Error).message }
