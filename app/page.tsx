@@ -193,14 +193,14 @@ export default function Home() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background max-w-md mx-auto flex items-center justify-center">
+      <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-background max-w-md mx-auto relative overflow-hidden shadow-xl">
+    <div className="min-h-screen bg-background relative overflow-hidden">
       {currentScreen === 'login' && (
         <LoginScreen onLogin={handleLogin} />
       )}

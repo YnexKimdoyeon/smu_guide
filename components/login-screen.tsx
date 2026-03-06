@@ -17,7 +17,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!studentId || !password) {
-      setError('학번과 비밀번호를 입력해주세요.')
+      setError('선문대 포털 아이디와 비밀번호를 입력해주세요.')
       return
     }
     setIsLoading(true)
