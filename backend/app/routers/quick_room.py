@@ -30,6 +30,7 @@ def build_room_response(db: Session, room: QuickRoom, current_user_id: int) -> Q
             user_id=member.user_id,
             name=user.name,
             department=user.department,
+            is_confirmed=member.is_confirmed or 0,
         )
         for member, user in members
     ]
@@ -277,3 +278,45 @@ def send_room_message(
         is_system=0,
         created_at=new_msg.created_at,
     )
+
+
+@router.post("/rooms/{room_id}/confirm")
+def confirm_attendance(
+    room_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """출석 확인 (꼭 갈거에요!)"""
+    member = db.query(QuickRoomMember).filter(
+        QuickRoomMember.room_id == room_id,
+        QuickRoomMember.user_id == current_user.id
+    ).first()
+
+    if not member:
+        raise HTTPException(status_code=403, detail="이 방의 멤버가 아닙니다")
+
+    member.is_confirmed = 1
+    db.commit()
+
+    return {"message": "출석 확인 완료", "is_confirmed": 1}
+
+
+@router.delete("/rooms/{room_id}/confirm")
+def cancel_attendance(
+    room_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """출석 확인 취소"""
+    member = db.query(QuickRoomMember).filter(
+        QuickRoomMember.room_id == room_id,
+        QuickRoomMember.user_id == current_user.id
+    ).first()
+
+    if not member:
+        raise HTTPException(status_code=403, detail="이 방의 멤버가 아닙니다")
+
+    member.is_confirmed = 0
+    db.commit()
+
+    return {"message": "출석 확인 취소", "is_confirmed": 0}

@@ -49,7 +49,7 @@ interface QuickRoom {
   max_members: number
   is_active: number
   current_members: number
-  members: { user_id: number; name: string; department: string }[]
+  members: { user_id: number; name: string; department: string; is_confirmed: number }[]
   is_joined: boolean
   created_at: string
 }
@@ -138,6 +138,7 @@ export function CommuteScreen({ onBack }: CommuteScreenProps) {
   const [showCreateRoom, setShowCreateRoom] = useState(false)
   const [createForm, setCreateForm] = useState({ title: '', departure: '', destination: '', depart_time: '' })
   const [isCreating, setIsCreating] = useState(false)
+  const [isQuickConfirming, setIsQuickConfirming] = useState(false)
   const quickViewType = selectedQuickRoom ? 'chat' : 'list'
   const quickMessagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -504,6 +505,35 @@ export function CommuteScreen({ onBack }: CommuteScreenProps) {
     }
   }
 
+  // 급하게 매칭 - 꼭 갈거에요 확인 상태
+  const getMyQuickConfirmStatus = () => {
+    if (!selectedQuickRoom) return false
+    const userId = getCurrentUserId()
+    if (!userId) return false
+    const member = selectedQuickRoom.members.find(m => m.user_id === userId)
+    return member?.is_confirmed === 1
+  }
+
+  const handleToggleQuickConfirm = async () => {
+    if (!selectedQuickRoom || isQuickConfirming) return
+    setIsQuickConfirming(true)
+    try {
+      const isConfirmed = getMyQuickConfirmStatus()
+      if (isConfirmed) {
+        await quickRoomAPI.cancelAttendance(selectedQuickRoom.id)
+      } else {
+        await quickRoomAPI.confirmAttendance(selectedQuickRoom.id)
+      }
+      const updated = await quickRoomAPI.getRoom(selectedQuickRoom.id)
+      setSelectedQuickRoom(updated)
+      setQuickRooms(prev => prev.map(r => r.id === updated.id ? updated : r))
+    } catch (error) {
+      console.error('출석 확인 실패:', error)
+    } finally {
+      setIsQuickConfirming(false)
+    }
+  }
+
   // 차단/신고 모달 렌더링
   const renderModals = () => (
     <>
@@ -647,15 +677,47 @@ export function CommuteScreen({ onBack }: CommuteScreenProps) {
             {selectedQuickRoom.members.map((member) => (
               <div
                 key={member.user_id}
-                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-card border border-border/50"
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl ${
+                  member.is_confirmed === 1
+                    ? 'bg-green-500/10 border border-green-500/30'
+                    : 'bg-card border border-border/50'
+                }`}
               >
+                {member.is_confirmed === 1 && <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />}
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground">{member.name}</p>
+                  <p className={`text-sm font-medium ${member.is_confirmed === 1 ? 'text-green-600' : 'text-foreground'}`}>{member.name}</p>
                   <p className="text-xs text-muted-foreground truncate">{member.department}</p>
                 </div>
               </div>
             ))}
           </div>
+        </div>
+
+        {/* 출석 확인 버튼 */}
+        <div className="px-4 py-3 bg-card border-b border-border/30">
+          <button
+            onClick={handleToggleQuickConfirm}
+            disabled={isQuickConfirming}
+            className={`w-full py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.98] disabled:opacity-50 ${
+              getMyQuickConfirmStatus()
+                ? 'bg-green-500 text-white hover:bg-green-600'
+                : 'bg-primary text-primary-foreground hover:bg-primary/90'
+            }`}
+          >
+            {isQuickConfirming ? (
+              '처리 중...'
+            ) : getMyQuickConfirmStatus() ? (
+              <>
+                <CheckCircle2 className="w-4 h-4" />
+                확인 완료! (취소하려면 클릭)
+              </>
+            ) : (
+              <>
+                <Check className="w-4 h-4" />
+                저는 꼭 갈거에요!
+              </>
+            )}
+          </button>
         </div>
 
         {/* 메시지 */}

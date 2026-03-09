@@ -290,6 +290,16 @@ export const quickRoomAPI = {
       body: JSON.stringify({ room_id: roomId, message }),
     })
   },
+
+  // 출석 확인 (꼭 갈거에요!)
+  confirmAttendance: async (roomId: number) => {
+    return fetchAPI(`/quick-room/rooms/${roomId}/confirm`, { method: 'POST' })
+  },
+
+  // 출석 확인 취소
+  cancelAttendance: async (roomId: number) => {
+    return fetchAPI(`/quick-room/rooms/${roomId}/confirm`, { method: 'DELETE' })
+  },
 }
 
 // 공지사항 API

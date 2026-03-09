@@ -26,6 +26,7 @@ class QuickRoomMember(Base):
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     room_id = Column(Integer, ForeignKey("SMU_QUICK_ROOMS.id"), nullable=False, comment="방 ID")
     user_id = Column(Integer, ForeignKey("SMU_USERS.id"), nullable=False, comment="사용자 ID")
+    is_confirmed = Column(Integer, default=0, comment="참석 확인 여부: 0=미확인, 1=확인")
     joined_at = Column(DateTime, server_default=func.now(), comment="참여일시")
 
 

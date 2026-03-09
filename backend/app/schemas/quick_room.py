@@ -16,6 +16,7 @@ class QuickRoomMemberInfo(BaseModel):
     user_id: int
     name: str
     department: str
+    is_confirmed: int = 0
 
     class Config:
         from_attributes = True
