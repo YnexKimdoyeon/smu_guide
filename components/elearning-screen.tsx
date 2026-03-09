@@ -588,19 +588,19 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
 
         {/* 탭 */}
         <div className="flex-shrink-0 px-4 py-2 border-b border-border/50">
-          <div className="flex gap-2">
+          <div className="grid grid-cols-4 gap-1.5">
             <button
               onClick={() => handleCourseTabChange('todo')}
-              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+              className={`py-2 text-xs font-medium rounded-lg transition-all flex items-center justify-center gap-1 ${
                 courseTab === 'todo'
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-secondary text-secondary-foreground'
               }`}
             >
-              <Clock className="w-4 h-4" />
+              <Clock className="w-3.5 h-3.5" />
               할 일
               {todoList.length > 0 && (
-                <span className={`ml-1 px-1.5 py-0.5 rounded-full text-xs ${
+                <span className={`px-1 py-0.5 rounded-full text-[10px] leading-none ${
                   courseTab === 'todo' ? 'bg-white/20' : 'bg-primary/20 text-primary'
                 }`}>
                   {todoList.length}
@@ -609,16 +609,16 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
             </button>
             <button
               onClick={() => handleCourseTabChange('announcements')}
-              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+              className={`py-2 text-xs font-medium rounded-lg transition-all flex items-center justify-center gap-1 ${
                 courseTab === 'announcements'
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-secondary text-secondary-foreground'
               }`}
             >
-              <Bell className="w-4 h-4" />
+              <Bell className="w-3.5 h-3.5" />
               공지
               {activities && activities.total_unread_announcements > 0 && (
-                <span className={`ml-1 px-1.5 py-0.5 rounded-full text-xs ${
+                <span className={`px-1 py-0.5 rounded-full text-[10px] leading-none ${
                   courseTab === 'announcements' ? 'bg-white/20' : 'bg-red-500 text-white'
                 }`}>
                   {activities.total_unread_announcements}
@@ -627,24 +627,24 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
             </button>
             <button
               onClick={() => handleCourseTabChange('boards')}
-              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+              className={`py-2 text-xs font-medium rounded-lg transition-all flex items-center justify-center gap-1 ${
                 courseTab === 'boards'
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-secondary text-secondary-foreground'
               }`}
             >
-              <LayoutList className="w-4 h-4" />
+              <LayoutList className="w-3.5 h-3.5" />
               게시판
             </button>
             <button
               onClick={() => handleCourseTabChange('students')}
-              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+              className={`py-2 text-xs font-medium rounded-lg transition-all flex items-center justify-center gap-1 ${
                 courseTab === 'students'
                   ? 'bg-primary text-primary-foreground'
                   : 'bg-secondary text-secondary-foreground'
               }`}
             >
-              <Users className="w-4 h-4" />
+              <Users className="w-3.5 h-3.5" />
               학생
             </button>
           </div>
