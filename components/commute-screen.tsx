@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { Clock, Users, ArrowLeft, Send, Check, RefreshCw, Info, Ban, Flag, AlertTriangle, CheckCircle2 } from 'lucide-react'
+import { Clock, Users, ArrowLeft, Send, Check, RefreshCw, Info, Ban, Flag, AlertTriangle, CheckCircle2, Plus, MapPin, LogOut, X } from 'lucide-react'
 import { AppShell } from './app-shell'
-import { commuteAPI, blockAPI } from '@/lib/api'
+import { commuteAPI, quickRoomAPI, blockAPI } from '@/lib/api'
 
 interface Schedule {
   day: string
@@ -35,6 +35,22 @@ interface ChatMessage {
   sender: string
   message: string
   is_mine: boolean
+  is_system?: number
+  created_at: string
+}
+
+interface QuickRoom {
+  id: number
+  creator_id: number
+  title: string
+  departure: string
+  destination: string
+  depart_time: string
+  max_members: number
+  is_active: number
+  current_members: number
+  members: { user_id: number; name: string; department: string }[]
+  is_joined: boolean
   created_at: string
 }
 
@@ -78,7 +94,7 @@ const TIMES = [
 ]
 const LOCATIONS = ['탕정역', '아산역', '온양온천역', '천안역', '천안터미널', '트라팰리스']
 
-type TabType = 'schedule' | 'groups'
+type TabType = 'schedule' | 'groups' | 'quick'
 type ViewType = 'list' | 'chat'
 
 export function CommuteScreen({ onBack }: CommuteScreenProps) {
@@ -112,6 +128,19 @@ export function CommuteScreen({ onBack }: CommuteScreenProps) {
   // 출석 확인 상태
   const [isConfirming, setIsConfirming] = useState(false)
 
+  // 급하게 매칭 상태
+  const [quickRooms, setQuickRooms] = useState<QuickRoom[]>([])
+  const [selectedQuickRoom, setSelectedQuickRoom] = useState<QuickRoom | null>(null)
+  const [quickMessages, setQuickMessages] = useState<ChatMessage[]>([])
+  const [quickNewMessage, setQuickNewMessage] = useState('')
+  const [isQuickLoading, setIsQuickLoading] = useState(false)
+  const [isQuickSending, setIsQuickSending] = useState(false)
+  const [showCreateRoom, setShowCreateRoom] = useState(false)
+  const [createForm, setCreateForm] = useState({ title: '', departure: '', destination: '', depart_time: '' })
+  const [isCreating, setIsCreating] = useState(false)
+  const quickViewType = selectedQuickRoom ? 'chat' : 'list'
+  const quickMessagesEndRef = useRef<HTMLDivElement>(null)
+
   // 차단 목록 로드
   useEffect(() => {
     const loadBlockedUsers = async () => {
@@ -136,6 +165,7 @@ export function CommuteScreen({ onBack }: CommuteScreenProps) {
       await blockAPI.blockUser(actionModal.userId)
       setBlockedUserIds(prev => [...prev, actionModal.userId])
       setMessages(prev => prev.filter(m => m.user_id !== actionModal.userId))
+      setQuickMessages(prev => prev.filter(m => m.user_id !== actionModal.userId))
       alert('차단되었습니다.')
       setActionModal(null)
     } catch (error: any) {
@@ -231,13 +261,20 @@ export function CommuteScreen({ onBack }: CommuteScreenProps) {
     if (activeTab === 'groups') {
       loadGroups()
     }
+    if (activeTab === 'quick') {
+      loadQuickRooms()
+    }
   }, [activeTab])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // 채팅 메시지 폴링
+  useEffect(() => {
+    quickMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [quickMessages])
+
+  // 채팅 메시지 폴링 (기존 매칭)
   useEffect(() => {
     if (viewType !== 'chat' || !selectedGroup) return
 
@@ -256,6 +293,33 @@ export function CommuteScreen({ onBack }: CommuteScreenProps) {
     const interval = setInterval(pollMessages, 3000)
     return () => clearInterval(interval)
   }, [viewType, selectedGroup])
+
+  // 급하게 매칭 채팅 폴링
+  useEffect(() => {
+    if (!selectedQuickRoom) return
+
+    const pollMessages = async () => {
+      try {
+        const data = await quickRoomAPI.getMessages(selectedQuickRoom.id)
+        const filtered = data.filter((m: ChatMessage) => !m.user_id || !blockedUserIds.includes(m.user_id))
+        setQuickMessages(filtered)
+      } catch (error) {
+        console.error('메시지 폴링 실패:', error)
+      }
+    }
+
+    pollMessages()
+    const interval = setInterval(pollMessages, 3000)
+    return () => clearInterval(interval)
+  }, [selectedQuickRoom])
+
+  // 급하게 매칭 방 목록 자동 새로고침 (5초)
+  useEffect(() => {
+    if (activeTab !== 'quick' || selectedQuickRoom) return
+
+    const interval = setInterval(loadQuickRooms, 5000)
+    return () => clearInterval(interval)
+  }, [activeTab, selectedQuickRoom])
 
   const handleTimeChange = (day: string, field: string, value: string) => {
     setSchedules(prev => ({
@@ -360,7 +424,311 @@ export function CommuteScreen({ onBack }: CommuteScreenProps) {
     return date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })
   }
 
-  // 채팅 화면
+  // === 급하게 매칭 관련 ===
+  const loadQuickRooms = async () => {
+    setIsQuickLoading(true)
+    try {
+      const data = await quickRoomAPI.getRooms()
+      setQuickRooms(data)
+    } catch (error) {
+      console.error('급하게 매칭 방 로드 실패:', error)
+    } finally {
+      setIsQuickLoading(false)
+    }
+  }
+
+  const handleCreateRoom = async () => {
+    if (!createForm.title.trim() || !createForm.departure.trim() || !createForm.destination.trim() || !createForm.depart_time) {
+      alert('모든 항목을 입력해주세요')
+      return
+    }
+    setIsCreating(true)
+    try {
+      const room = await quickRoomAPI.createRoom(createForm)
+      setQuickRooms(prev => [room, ...prev])
+      setShowCreateRoom(false)
+      setCreateForm({ title: '', departure: '', destination: '', depart_time: '' })
+      // 바로 채팅방으로 이동
+      setSelectedQuickRoom(room)
+    } catch (error: any) {
+      alert(error.message || '방 생성에 실패했습니다')
+    } finally {
+      setIsCreating(false)
+    }
+  }
+
+  const handleJoinQuickRoom = async (room: QuickRoom) => {
+    if (room.is_joined) {
+      // 이미 참여 중이면 바로 채팅으로
+      setSelectedQuickRoom(room)
+      return
+    }
+    if (room.current_members >= room.max_members) {
+      alert('방이 가득 찼습니다')
+      return
+    }
+    try {
+      await quickRoomAPI.joinRoom(room.id)
+      const updated = await quickRoomAPI.getRoom(room.id)
+      setQuickRooms(prev => prev.map(r => r.id === updated.id ? updated : r))
+      setSelectedQuickRoom(updated)
+    } catch (error: any) {
+      alert(error.message || '참여에 실패했습니다')
+    }
+  }
+
+  const handleLeaveQuickRoom = async () => {
+    if (!selectedQuickRoom) return
+    if (!confirm('정말 이 방을 나가시겠습니까?')) return
+    try {
+      await quickRoomAPI.leaveRoom(selectedQuickRoom.id)
+      setSelectedQuickRoom(null)
+      setQuickMessages([])
+      loadQuickRooms()
+    } catch (error: any) {
+      alert(error.message || '나가기에 실패했습니다')
+    }
+  }
+
+  const handleSendQuickMessage = async () => {
+    if (!quickNewMessage.trim() || !selectedQuickRoom || isQuickSending) return
+    setIsQuickSending(true)
+    try {
+      const sent = await quickRoomAPI.sendMessage(selectedQuickRoom.id, quickNewMessage)
+      setQuickMessages(prev => [...prev, sent])
+      setQuickNewMessage('')
+    } catch (error) {
+      console.error('메시지 전송 실패:', error)
+    } finally {
+      setIsQuickSending(false)
+    }
+  }
+
+  // 차단/신고 모달 렌더링
+  const renderModals = () => (
+    <>
+      {/* 차단/신고 선택 모달 */}
+      {actionModal && !showReportModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={closeModals}>
+          <div
+            className="bg-card rounded-t-2xl w-full max-w-lg p-4 pb-8 animate-in slide-in-from-bottom duration-300"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="w-10 h-1 bg-muted-foreground/30 rounded-full mx-auto mb-4" />
+            <p className="text-center text-sm text-muted-foreground mb-4">{actionModal.userName}</p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={handleBlock}
+                disabled={isProcessing}
+                className="flex items-center gap-3 w-full p-4 rounded-xl bg-secondary hover:bg-muted transition-colors"
+              >
+                <Ban className="w-5 h-5 text-orange-500" />
+                <div className="text-left">
+                  <p className="text-sm font-medium text-foreground">차단하기</p>
+                  <p className="text-xs text-muted-foreground">이 사용자의 메시지를 더 이상 보지 않습니다</p>
+                </div>
+              </button>
+              <button
+                onClick={handleOpenReport}
+                disabled={isProcessing}
+                className="flex items-center gap-3 w-full p-4 rounded-xl bg-secondary hover:bg-muted transition-colors"
+              >
+                <Flag className="w-5 h-5 text-red-500" />
+                <div className="text-left">
+                  <p className="text-sm font-medium text-foreground">신고하기</p>
+                  <p className="text-xs text-muted-foreground">부적절한 행위를 신고합니다</p>
+                </div>
+              </button>
+            </div>
+            <button
+              onClick={closeModals}
+              className="w-full mt-4 py-3 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              취소
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 신고 모달 */}
+      {showReportModal && actionModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={closeModals}>
+          <div
+            className="bg-card rounded-2xl w-full max-w-sm p-5 animate-in zoom-in-95 duration-200"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 text-red-500" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-foreground">신고하기</h3>
+                <p className="text-xs text-muted-foreground">{actionModal.userName}</p>
+              </div>
+            </div>
+            <div className="mb-4">
+              <p className="text-xs font-medium text-muted-foreground mb-2">신고 사유</p>
+              <div className="flex flex-wrap gap-2">
+                {REPORT_REASONS.map(reason => (
+                  <button
+                    key={reason.value}
+                    onClick={() => setReportReason(reason.value)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                      reportReason === reason.value
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-secondary text-foreground hover:bg-muted'
+                    }`}
+                  >
+                    {reason.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="mb-4">
+              <p className="text-xs font-medium text-muted-foreground mb-2">상세 내용 (선택)</p>
+              <textarea
+                value={reportDetail}
+                onChange={e => setReportDetail(e.target.value)}
+                placeholder="추가적인 내용을 입력해주세요"
+                className="w-full h-20 px-3 py-2 rounded-xl bg-secondary border border-border/50 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowReportModal(false)}
+                className="flex-1 py-2.5 rounded-xl bg-secondary text-foreground font-medium hover:bg-muted transition-colors"
+              >
+                뒤로
+              </button>
+              <button
+                onClick={handleReport}
+                disabled={!reportReason || isProcessing}
+                className="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-medium hover:bg-red-600 transition-colors disabled:opacity-50"
+              >
+                {isProcessing ? '처리중...' : '신고하기'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+
+  // 급하게 매칭 채팅 화면
+  if (selectedQuickRoom) {
+    return (
+      <div className="fixed inset-0 bg-background flex flex-col">
+        <header className="flex-shrink-0 bg-card/80 backdrop-blur-lg border-b border-border/50 px-4 py-3 flex items-center gap-3">
+          <button
+            onClick={() => { setSelectedQuickRoom(null); setQuickMessages([]) }}
+            className="w-9 h-9 rounded-full bg-secondary flex items-center justify-center hover:bg-muted transition-colors"
+          >
+            <ArrowLeft className="w-4 h-4 text-foreground" />
+          </button>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-foreground truncate">
+              {selectedQuickRoom.title}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {selectedQuickRoom.departure} → {selectedQuickRoom.destination} · {selectedQuickRoom.depart_time} · {selectedQuickRoom.current_members}/{selectedQuickRoom.max_members}명
+            </p>
+          </div>
+          <button
+            onClick={handleLeaveQuickRoom}
+            className="w-9 h-9 rounded-full bg-red-500/10 flex items-center justify-center hover:bg-red-500/20 transition-colors"
+          >
+            <LogOut className="w-4 h-4 text-red-500" />
+          </button>
+        </header>
+
+        {/* 멤버 목록 */}
+        <div className="px-4 py-3 bg-muted/30 border-b border-border/30">
+          <div className="flex flex-wrap gap-2">
+            {selectedQuickRoom.members.map((member) => (
+              <div
+                key={member.user_id}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl bg-card border border-border/50"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">{member.name}</p>
+                  <p className="text-xs text-muted-foreground truncate">{member.department}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 메시지 */}
+        <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3">
+          {quickMessages.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center">
+              <p className="text-sm text-muted-foreground">첫 메시지를 보내보세요!</p>
+            </div>
+          ) : (
+            quickMessages.map((msg) => (
+              msg.is_system ? (
+                <div key={msg.id} className="flex justify-center">
+                  <span className="px-3 py-1.5 rounded-full bg-muted text-xs text-muted-foreground">
+                    {msg.message}
+                  </span>
+                </div>
+              ) : (
+                <div
+                  key={msg.id}
+                  className={`flex flex-col max-w-[80%] ${msg.is_mine ? 'self-end items-end' : 'self-start items-start'}`}
+                >
+                  {!msg.is_mine && (
+                    <button
+                      onClick={() => msg.user_id && handleUserClick(msg.user_id, msg.sender, msg.id)}
+                      className="text-[10px] text-muted-foreground mb-1 ml-1 hover:text-primary hover:underline transition-colors"
+                    >
+                      {msg.sender}
+                    </button>
+                  )}
+                  <div
+                    className={`px-3.5 py-2.5 rounded-2xl text-sm leading-relaxed ${
+                      msg.is_mine
+                        ? 'bg-primary text-primary-foreground rounded-tr-md'
+                        : 'bg-card border border-border/50 text-foreground rounded-tl-md'
+                    }`}
+                  >
+                    {msg.message}
+                  </div>
+                  <span className="text-[10px] text-muted-foreground mt-1 mx-1">{formatTime(msg.created_at)}</span>
+                </div>
+              )
+            ))
+          )}
+          <div ref={quickMessagesEndRef} />
+        </div>
+
+        {/* 입력 */}
+        <div className="flex-shrink-0 bg-card/80 backdrop-blur-lg border-t border-border/50 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              placeholder="메시지를 입력하세요..."
+              value={quickNewMessage}
+              onChange={(e) => setQuickNewMessage(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSendQuickMessage()}
+              className="flex-1 h-10 px-4 rounded-full bg-secondary border border-border/50 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+            />
+            <button
+              onClick={handleSendQuickMessage}
+              disabled={!quickNewMessage.trim() || isQuickSending}
+              className="w-10 h-10 rounded-full bg-primary flex items-center justify-center hover:bg-primary/90 disabled:opacity-40 transition-all active:scale-95"
+            >
+              <Send className="w-4 h-4 text-primary-foreground" />
+            </button>
+          </div>
+        </div>
+
+        {renderModals()}
+      </div>
+    )
+  }
+
+  // 기존 매칭 채팅 화면
   if (viewType === 'chat' && selectedGroup) {
     return (
       <div className="fixed inset-0 bg-background flex flex-col">
@@ -500,110 +868,7 @@ export function CommuteScreen({ onBack }: CommuteScreenProps) {
           </div>
         </div>
 
-        {/* 차단/신고 선택 모달 */}
-        {actionModal && !showReportModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={closeModals}>
-            <div
-              className="bg-card rounded-t-2xl w-full max-w-lg p-4 pb-8 animate-in slide-in-from-bottom duration-300"
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="w-10 h-1 bg-muted-foreground/30 rounded-full mx-auto mb-4" />
-              <p className="text-center text-sm text-muted-foreground mb-4">{actionModal.userName}</p>
-              <div className="flex flex-col gap-2">
-                <button
-                  onClick={handleBlock}
-                  disabled={isProcessing}
-                  className="flex items-center gap-3 w-full p-4 rounded-xl bg-secondary hover:bg-muted transition-colors"
-                >
-                  <Ban className="w-5 h-5 text-orange-500" />
-                  <div className="text-left">
-                    <p className="text-sm font-medium text-foreground">차단하기</p>
-                    <p className="text-xs text-muted-foreground">이 사용자의 메시지를 더 이상 보지 않습니다</p>
-                  </div>
-                </button>
-                <button
-                  onClick={handleOpenReport}
-                  disabled={isProcessing}
-                  className="flex items-center gap-3 w-full p-4 rounded-xl bg-secondary hover:bg-muted transition-colors"
-                >
-                  <Flag className="w-5 h-5 text-red-500" />
-                  <div className="text-left">
-                    <p className="text-sm font-medium text-foreground">신고하기</p>
-                    <p className="text-xs text-muted-foreground">부적절한 행위를 신고합니다</p>
-                  </div>
-                </button>
-              </div>
-              <button
-                onClick={closeModals}
-                className="w-full mt-4 py-3 text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                취소
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* 신고 모달 */}
-        {showReportModal && actionModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={closeModals}>
-            <div
-              className="bg-card rounded-2xl w-full max-w-sm p-5 animate-in zoom-in-95 duration-200"
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-                  <AlertTriangle className="w-5 h-5 text-red-500" />
-                </div>
-                <div>
-                  <h3 className="text-base font-semibold text-foreground">신고하기</h3>
-                  <p className="text-xs text-muted-foreground">{actionModal.userName}</p>
-                </div>
-              </div>
-              <div className="mb-4">
-                <p className="text-xs font-medium text-muted-foreground mb-2">신고 사유</p>
-                <div className="flex flex-wrap gap-2">
-                  {REPORT_REASONS.map(reason => (
-                    <button
-                      key={reason.value}
-                      onClick={() => setReportReason(reason.value)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                        reportReason === reason.value
-                          ? 'bg-primary text-primary-foreground'
-                          : 'bg-secondary text-foreground hover:bg-muted'
-                      }`}
-                    >
-                      {reason.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div className="mb-4">
-                <p className="text-xs font-medium text-muted-foreground mb-2">상세 내용 (선택)</p>
-                <textarea
-                  value={reportDetail}
-                  onChange={e => setReportDetail(e.target.value)}
-                  placeholder="추가적인 내용을 입력해주세요"
-                  className="w-full h-20 px-3 py-2 rounded-xl bg-secondary border border-border/50 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
-                />
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowReportModal(false)}
-                  className="flex-1 py-2.5 rounded-xl bg-secondary text-foreground font-medium hover:bg-muted transition-colors"
-                >
-                  뒤로
-                </button>
-                <button
-                  onClick={handleReport}
-                  disabled={!reportReason || isProcessing}
-                  className="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-medium hover:bg-red-600 transition-colors disabled:opacity-50"
-                >
-                  {isProcessing ? '처리중...' : '신고하기'}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+        {renderModals()}
       </div>
     )
   }
@@ -632,6 +897,16 @@ export function CommuteScreen({ onBack }: CommuteScreenProps) {
             }`}
           >
             오늘의 매칭
+          </button>
+          <button
+            onClick={() => setActiveTab('quick')}
+            className={`flex-1 py-3 text-xs font-medium text-center border-b-2 transition-colors ${
+              activeTab === 'quick'
+                ? 'border-primary text-primary'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            급하게 매칭
           </button>
         </div>
 
@@ -845,115 +1120,182 @@ export function CommuteScreen({ onBack }: CommuteScreenProps) {
             )}
           </div>
         )}
+
+        {/* 급하게 매칭 탭 */}
+        {activeTab === 'quick' && (
+          <div className="p-4 flex flex-col gap-4">
+            {/* 안내 */}
+            <div className="flex items-start gap-3 p-4 bg-amber-500/10 rounded-xl border border-amber-500/20">
+              <Info className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-foreground">급하게 매칭</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  지금 당장 같이 갈 사람이 필요할 때! 방을 만들거나 참여하세요. (최대 4명)
+                </p>
+              </div>
+            </div>
+
+            {/* 방 만들기 버튼 */}
+            <button
+              onClick={() => setShowCreateRoom(true)}
+              className="w-full h-12 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+            >
+              <Plus className="w-5 h-5" />
+              방 만들기
+            </button>
+
+            {/* 새로고침 */}
+            <button
+              onClick={loadQuickRooms}
+              disabled={isQuickLoading}
+              className="w-full h-10 rounded-xl bg-secondary text-foreground text-sm font-medium hover:bg-muted active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              <RefreshCw className={`w-4 h-4 ${isQuickLoading ? 'animate-spin' : ''}`} />
+              새로고침
+            </button>
+
+            {/* 방 목록 */}
+            {isQuickLoading && quickRooms.length === 0 ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : quickRooms.length === 0 ? (
+              <div className="text-center py-12">
+                <MapPin className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3" />
+                <p className="text-muted-foreground text-sm">아직 만들어진 방이 없습니다</p>
+                <p className="text-xs text-muted-foreground mt-1">첫 번째 방을 만들어보세요!</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {quickRooms.map((room) => (
+                  <button
+                    key={room.id}
+                    onClick={() => handleJoinQuickRoom(room)}
+                    className="w-full text-left p-4 bg-card rounded-2xl border border-border/50 shadow-sm hover:shadow-md transition-shadow"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-11 h-11 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
+                        <MapPin className="w-5 h-5 text-amber-600" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-foreground truncate">{room.title}</p>
+                        <div className="flex items-center gap-1 mt-1">
+                          <span className="text-xs text-muted-foreground">{room.departure}</span>
+                          <span className="text-xs text-muted-foreground">→</span>
+                          <span className="text-xs text-muted-foreground">{room.destination}</span>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1.5">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-amber-500/20 text-amber-600">
+                            {room.depart_time} 출발
+                          </span>
+                          {room.is_joined && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-500/20 text-green-600">
+                              참여중
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-center gap-1">
+                        <div className="flex items-center gap-1 text-primary">
+                          <Users className="w-4 h-4" />
+                          <span className="text-sm font-semibold">{room.current_members}/{room.max_members}</span>
+                        </div>
+                        {room.current_members >= room.max_members && !room.is_joined && (
+                          <span className="text-[10px] text-red-500 font-medium">만석</span>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* 차단/신고 선택 모달 */}
-      {actionModal && !showReportModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={closeModals}>
+      {/* 방 만들기 모달 */}
+      {showCreateRoom && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowCreateRoom(false)}>
           <div
-            className="bg-card rounded-t-2xl w-full max-w-lg p-4 pb-8 animate-in slide-in-from-bottom duration-300"
+            className="bg-card rounded-2xl w-full max-w-sm p-5 animate-in zoom-in-95 duration-200"
             onClick={e => e.stopPropagation()}
           >
-            <div className="w-10 h-1 bg-muted-foreground/30 rounded-full mx-auto mb-4" />
-            <p className="text-center text-sm text-muted-foreground mb-4">{actionModal.userName}</p>
-            <div className="flex flex-col gap-2">
-              <button
-                onClick={handleBlock}
-                disabled={isProcessing}
-                className="flex items-center gap-3 w-full p-4 rounded-xl bg-secondary hover:bg-muted transition-colors"
-              >
-                <Ban className="w-5 h-5 text-orange-500" />
-                <div className="text-left">
-                  <p className="text-sm font-medium text-foreground">차단하기</p>
-                  <p className="text-xs text-muted-foreground">이 사용자의 메시지를 더 이상 보지 않습니다</p>
-                </div>
-              </button>
-              <button
-                onClick={handleOpenReport}
-                disabled={isProcessing}
-                className="flex items-center gap-3 w-full p-4 rounded-xl bg-secondary hover:bg-muted transition-colors"
-              >
-                <Flag className="w-5 h-5 text-red-500" />
-                <div className="text-left">
-                  <p className="text-sm font-medium text-foreground">신고하기</p>
-                  <p className="text-xs text-muted-foreground">부적절한 행위를 신고합니다</p>
-                </div>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-semibold text-foreground">방 만들기</h3>
+              <button onClick={() => setShowCreateRoom(false)} className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center">
+                <X className="w-4 h-4 text-muted-foreground" />
               </button>
             </div>
+
+            <div className="flex flex-col gap-3">
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1.5">방 제목</p>
+                <input
+                  type="text"
+                  placeholder="예: 탕정역에서 같이 갈 사람!"
+                  value={createForm.title}
+                  onChange={(e) => setCreateForm(prev => ({ ...prev, title: e.target.value }))}
+                  className="w-full h-10 px-3 rounded-xl bg-secondary border border-border/50 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+              </div>
+
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1.5">출발지</p>
+                <select
+                  value={createForm.departure}
+                  onChange={(e) => setCreateForm(prev => ({ ...prev, departure: e.target.value }))}
+                  className="w-full h-10 px-3 rounded-xl bg-secondary border border-border/50 text-sm text-foreground appearance-none focus:outline-none focus:ring-2 focus:ring-primary/50"
+                >
+                  <option value="">출발지 선택</option>
+                  {LOCATIONS.map((loc) => (
+                    <option key={loc} value={loc}>{loc}</option>
+                  ))}
+                  <option value="선문대">선문대</option>
+                </select>
+              </div>
+
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1.5">도착지</p>
+                <select
+                  value={createForm.destination}
+                  onChange={(e) => setCreateForm(prev => ({ ...prev, destination: e.target.value }))}
+                  className="w-full h-10 px-3 rounded-xl bg-secondary border border-border/50 text-sm text-foreground appearance-none focus:outline-none focus:ring-2 focus:ring-primary/50"
+                >
+                  <option value="">도착지 선택</option>
+                  <option value="선문대">선문대</option>
+                  {LOCATIONS.map((loc) => (
+                    <option key={loc} value={loc}>{loc}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-1.5">출발 시간</p>
+                <select
+                  value={createForm.depart_time}
+                  onChange={(e) => setCreateForm(prev => ({ ...prev, depart_time: e.target.value }))}
+                  className="w-full h-10 px-3 rounded-xl bg-secondary border border-border/50 text-sm text-foreground appearance-none focus:outline-none focus:ring-2 focus:ring-primary/50"
+                >
+                  <option value="">시간 선택</option>
+                  {TIMES.map((t) => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
             <button
-              onClick={closeModals}
-              className="w-full mt-4 py-3 text-sm text-muted-foreground hover:text-foreground transition-colors"
+              onClick={handleCreateRoom}
+              disabled={isCreating}
+              className="mt-4 w-full h-11 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center justify-center gap-2"
             >
-              취소
+              {isCreating ? '생성 중...' : '방 만들기'}
             </button>
           </div>
         </div>
       )}
 
-      {/* 신고 모달 */}
-      {showReportModal && actionModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={closeModals}>
-          <div
-            className="bg-card rounded-2xl w-full max-w-sm p-5 animate-in zoom-in-95 duration-200"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
-                <AlertTriangle className="w-5 h-5 text-red-500" />
-              </div>
-              <div>
-                <h3 className="text-base font-semibold text-foreground">신고하기</h3>
-                <p className="text-xs text-muted-foreground">{actionModal.userName}</p>
-              </div>
-            </div>
-
-            <div className="mb-4">
-              <p className="text-xs font-medium text-muted-foreground mb-2">신고 사유</p>
-              <div className="flex flex-wrap gap-2">
-                {REPORT_REASONS.map(reason => (
-                  <button
-                    key={reason.value}
-                    onClick={() => setReportReason(reason.value)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                      reportReason === reason.value
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-secondary text-foreground hover:bg-muted'
-                    }`}
-                  >
-                    {reason.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="mb-4">
-              <p className="text-xs font-medium text-muted-foreground mb-2">상세 내용 (선택)</p>
-              <textarea
-                value={reportDetail}
-                onChange={e => setReportDetail(e.target.value)}
-                placeholder="추가적인 내용을 입력해주세요"
-                className="w-full h-20 px-3 py-2 rounded-xl bg-secondary border border-border/50 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
-              />
-            </div>
-
-            <div className="flex gap-2">
-              <button
-                onClick={() => setShowReportModal(false)}
-                className="flex-1 py-2.5 rounded-xl bg-secondary text-foreground font-medium hover:bg-muted transition-colors"
-              >
-                뒤로
-              </button>
-              <button
-                onClick={handleReport}
-                disabled={!reportReason || isProcessing}
-                className="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-medium hover:bg-red-600 transition-colors disabled:opacity-50"
-              >
-                {isProcessing ? '처리중...' : '신고하기'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {renderModals()}
     </AppShell>
   )
 }

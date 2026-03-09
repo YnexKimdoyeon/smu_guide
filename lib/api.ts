@@ -243,6 +243,55 @@ export const commuteAPI = {
   },
 }
 
+// 급하게 매칭 API
+export const quickRoomAPI = {
+  // 방 목록 조회
+  getRooms: async () => {
+    return fetchAPI('/quick-room/rooms')
+  },
+
+  // 방 생성
+  createRoom: async (data: { title: string; departure: string; destination: string; depart_time: string }) => {
+    return fetchAPI('/quick-room/rooms', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  },
+
+  // 방 상세 조회
+  getRoom: async (roomId: number) => {
+    return fetchAPI(`/quick-room/rooms/${roomId}`)
+  },
+
+  // 방 참여
+  joinRoom: async (roomId: number) => {
+    return fetchAPI(`/quick-room/rooms/${roomId}/join`, { method: 'POST' })
+  },
+
+  // 방 나가기
+  leaveRoom: async (roomId: number) => {
+    return fetchAPI(`/quick-room/rooms/${roomId}/leave`, { method: 'POST' })
+  },
+
+  // 방 마감
+  closeRoom: async (roomId: number) => {
+    return fetchAPI(`/quick-room/rooms/${roomId}`, { method: 'DELETE' })
+  },
+
+  // 메시지 조회
+  getMessages: async (roomId: number) => {
+    return fetchAPI(`/quick-room/rooms/${roomId}/messages`)
+  },
+
+  // 메시지 전송
+  sendMessage: async (roomId: number, message: string) => {
+    return fetchAPI('/quick-room/rooms/messages', {
+      method: 'POST',
+      body: JSON.stringify({ room_id: roomId, message }),
+    })
+  },
+}
+
 // 공지사항 API
 export const announcementAPI = {
   // 목록 조회
