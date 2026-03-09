@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ArrowLeft, BookOpen, Video, FileText, MessageSquare, CheckCircle2, Clock, AlertCircle, Lock, Loader2, Bell, ChevronRight, LayoutList, Users } from 'lucide-react'
+import { ArrowLeft, BookOpen, Video, FileText, MessageSquare, CheckCircle2, Clock, AlertCircle, Lock, Loader2, Bell, ChevronRight, LayoutList, Users, ClipboardList } from 'lucide-react'
 import { canvasAPI } from '@/lib/api'
 
 interface TodoItem {
@@ -91,7 +91,16 @@ interface CourseUser {
   }>
 }
 
-type CourseTab = 'todo' | 'announcements' | 'boards' | 'students'
+interface SyllabusData {
+  syllabus_html: string
+  grading_weights: Array<{
+    group: string
+    weight: string
+    is_total: boolean
+  }>
+}
+
+type CourseTab = 'todo' | 'announcements' | 'boards' | 'students' | 'syllabus'
 
 // Canvas 자격 증명 저장/조회 (자동 재로그인용)
 const CANVAS_CREDS_KEY = 'canvas_credentials'
@@ -157,6 +166,10 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
   // 수강생 관련 상태
   const [courseUsers, setCourseUsers] = useState<CourseUser[]>([])
   const [loadingUsers, setLoadingUsers] = useState(false)
+
+  // 수업 계획서 관련 상태
+  const [syllabusData, setSyllabusData] = useState<SyllabusData | null>(null)
+  const [loadingSyllabus, setLoadingSyllabus] = useState(false)
 
   useEffect(() => {
     checkSessionAndLoad()
@@ -339,6 +352,9 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
     if (tab === 'students' && selectedCourseId && courseUsers.length === 0) {
       await loadCourseUsers(selectedCourseId)
     }
+    if (tab === 'syllabus' && selectedCourseId && !syllabusData) {
+      await loadSyllabus(selectedCourseId)
+    }
   }
 
   // 과목별 공지사항 목록 조회
@@ -367,6 +383,20 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
       console.error('게시판 목록 조회 실패:', err)
     } finally {
       setLoadingBoards(false)
+    }
+  }
+
+  // 수업 계획서 조회
+  const loadSyllabus = async (courseId: number) => {
+    setLoadingSyllabus(true)
+    setSyllabusData(null)
+    try {
+      const data = await canvasAPI.getCourseSyllabus(courseId)
+      setSyllabusData(data)
+    } catch (err: any) {
+      console.error('수업 계획서 조회 실패:', err)
+    } finally {
+      setLoadingSyllabus(false)
     }
   }
 
@@ -554,6 +584,7 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
     setBoardPosts([])
     setSelectedPost(null)
     setCourseUsers([])
+    setSyllabusData(null)
     setCourseTab('todo')
     loadData() // 자동 리프레시
   }
@@ -588,65 +619,34 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
 
         {/* 탭 */}
         <div className="flex-shrink-0 px-4 py-2 border-b border-border/50">
-          <div className="grid grid-cols-4 gap-1.5">
-            <button
-              onClick={() => handleCourseTabChange('todo')}
-              className={`py-2 text-xs font-medium rounded-lg transition-all flex items-center justify-center gap-1 ${
-                courseTab === 'todo'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-secondary text-secondary-foreground'
-              }`}
-            >
-              <Clock className="w-3.5 h-3.5" />
-              할 일
-              {todoList.length > 0 && (
-                <span className={`px-1 py-0.5 rounded-full text-[10px] leading-none ${
-                  courseTab === 'todo' ? 'bg-white/20' : 'bg-primary/20 text-primary'
-                }`}>
-                  {todoList.length}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => handleCourseTabChange('announcements')}
-              className={`py-2 text-xs font-medium rounded-lg transition-all flex items-center justify-center gap-1 ${
-                courseTab === 'announcements'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-secondary text-secondary-foreground'
-              }`}
-            >
-              <Bell className="w-3.5 h-3.5" />
-              공지
-              {activities && activities.total_unread_announcements > 0 && (
-                <span className={`px-1 py-0.5 rounded-full text-[10px] leading-none ${
-                  courseTab === 'announcements' ? 'bg-white/20' : 'bg-red-500 text-white'
-                }`}>
-                  {activities.total_unread_announcements}
-                </span>
-              )}
-            </button>
-            <button
-              onClick={() => handleCourseTabChange('boards')}
-              className={`py-2 text-xs font-medium rounded-lg transition-all flex items-center justify-center gap-1 ${
-                courseTab === 'boards'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-secondary text-secondary-foreground'
-              }`}
-            >
-              <LayoutList className="w-3.5 h-3.5" />
-              게시판
-            </button>
-            <button
-              onClick={() => handleCourseTabChange('students')}
-              className={`py-2 text-xs font-medium rounded-lg transition-all flex items-center justify-center gap-1 ${
-                courseTab === 'students'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-secondary text-secondary-foreground'
-              }`}
-            >
-              <Users className="w-3.5 h-3.5" />
-              학생
-            </button>
+          <div className="flex gap-1.5 overflow-x-auto scrollbar-hide">
+            {([
+              { key: 'todo' as CourseTab, icon: <Clock className="w-3.5 h-3.5" />, label: '할 일', badge: todoList.length > 0 ? todoList.length : null, badgeActive: 'bg-white/20', badgeInactive: 'bg-primary/20 text-primary' },
+              { key: 'announcements' as CourseTab, icon: <Bell className="w-3.5 h-3.5" />, label: '공지', badge: activities && activities.total_unread_announcements > 0 ? activities.total_unread_announcements : null, badgeActive: 'bg-white/20', badgeInactive: 'bg-red-500 text-white' },
+              { key: 'syllabus' as CourseTab, icon: <ClipboardList className="w-3.5 h-3.5" />, label: '계획서' },
+              { key: 'boards' as CourseTab, icon: <LayoutList className="w-3.5 h-3.5" />, label: '게시판' },
+              { key: 'students' as CourseTab, icon: <Users className="w-3.5 h-3.5" />, label: '학생' },
+            ]).map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => handleCourseTabChange(tab.key)}
+                className={`flex-shrink-0 px-3 py-2 text-xs font-medium rounded-lg transition-all flex items-center justify-center gap-1 ${
+                  courseTab === tab.key
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-secondary text-secondary-foreground'
+                }`}
+              >
+                {tab.icon}
+                {tab.label}
+                {tab.badge && (
+                  <span className={`px-1 py-0.5 rounded-full text-[10px] leading-none ${
+                    courseTab === tab.key ? (tab.badgeActive || 'bg-white/20') : (tab.badgeInactive || 'bg-primary/20 text-primary')
+                  }`}>
+                    {tab.badge}
+                  </span>
+                )}
+              </button>
+            ))}
           </div>
         </div>
 
@@ -731,6 +731,78 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
                       </div>
                     </button>
                   ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {courseTab === 'syllabus' && (
+            /* 수업 계획서 탭 */
+            <div className="p-4">
+              {loadingSyllabus ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                </div>
+              ) : !syllabusData || (!syllabusData.syllabus_html && syllabusData.grading_weights.length === 0) ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <ClipboardList className="w-12 h-12 text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">수업 계획서가 없습니다.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {syllabusData.grading_weights.length > 0 && (
+                    <div className="bg-card rounded-xl border border-border/50 overflow-hidden">
+                      <div className="px-4 py-3 bg-primary/5 border-b border-border/50">
+                        <h3 className="text-sm font-semibold text-foreground">평가 비중</h3>
+                      </div>
+                      <div className="divide-y divide-border/50">
+                        {syllabusData.grading_weights.map((item, idx) => (
+                          <div key={idx} className={`px-4 py-2.5 flex justify-between items-center ${item.is_total ? 'bg-primary/5' : ''}`}>
+                            <span className={`text-sm ${item.is_total ? 'font-bold text-foreground' : 'text-foreground'}`}>{item.group}</span>
+                            <span className={`text-sm ${item.is_total ? 'font-bold text-primary' : 'text-muted-foreground'}`}>{item.weight}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {syllabusData.syllabus_html && (
+                    <div className="bg-card rounded-xl border border-border/50 overflow-hidden">
+                      <div className="p-4 overflow-x-auto syllabus-content"
+                        dangerouslySetInnerHTML={{ __html: syllabusData.syllabus_html }}
+                      />
+                      <style jsx global>{`
+                        .syllabus-content table {
+                          font-size: 11px;
+                          width: 100%;
+                          border-collapse: collapse;
+                        }
+                        .syllabus-content th, .syllabus-content td {
+                          padding: 6px 8px;
+                          border: 1px solid hsl(var(--border));
+                          text-align: center;
+                          line-height: 1.3;
+                        }
+                        .syllabus-content th {
+                          background: hsl(var(--muted));
+                          font-weight: 600;
+                          color: hsl(var(--foreground));
+                        }
+                        .syllabus-content td {
+                          color: hsl(var(--foreground));
+                        }
+                        .syllabus-content h1 {
+                          font-size: 16px;
+                          font-weight: 700;
+                          text-align: center;
+                          margin-bottom: 12px;
+                          color: hsl(var(--foreground));
+                        }
+                        .syllabus-content > div > style {
+                          display: none;
+                        }
+                      `}</style>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

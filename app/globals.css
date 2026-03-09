@@ -110,4 +110,11 @@
   .text-responsive-sm {
     font-size: clamp(0.75rem, 3vw, 0.875rem);
   }
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
 }

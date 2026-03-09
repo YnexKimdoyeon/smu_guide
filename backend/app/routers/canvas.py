@@ -747,3 +747,87 @@ async def get_course_users(
     return response.json()
 
 
+async def _fetch_syllabus(session_data: dict, course_id: int):
+    """수업 계획서 페이지 HTML 조회 내부 함수"""
+    cookies = session_data.get('cookies', {})
+
+    async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
+        }
+
+        response = await client.get(
+            f"https://canvas.sunmoon.ac.kr/courses/{course_id}/assignments/syllabus",
+            headers=headers,
+            cookies=cookies
+        )
+        return response
+
+
+def parse_syllabus_html(html: str) -> dict:
+    """수업 계획서 HTML에서 내용 파싱"""
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(html, 'html.parser')
+
+    result = {
+        'syllabus_html': '',
+        'grading_weights': []
+    }
+
+    # 수업 계획서 본문 추출
+    syllabus_div = soup.find('div', id='course_syllabus')
+    if syllabus_div:
+        result['syllabus_html'] = str(syllabus_div)
+
+    # 평가 비중 추출
+    grading_div = soup.find('div', attrs={'aria-label': '과제 비중'})
+    if grading_div:
+        table = grading_div.find('table', class_='summary')
+        if table:
+            tbody = table.find('tbody')
+            if tbody:
+                for tr in tbody.find_all('tr'):
+                    th = tr.find('th', scope='row')
+                    td = tr.find('td')
+                    if th and td:
+                        result['grading_weights'].append({
+                            'group': th.get_text(strip=True),
+                            'weight': td.get_text(strip=True),
+                            'is_total': 'font-weight' in (tr.get('style') or '')
+                        })
+
+    return result
+
+
+@router.get("/courses/{course_id}/syllabus")
+async def get_course_syllabus(
+    course_id: int,
+    current_user: User = Depends(get_current_user)
+):
+    """과목 수업 계획서 조회"""
+    user_id = current_user.id
+
+    if user_id not in canvas_session_cache:
+        raise HTTPException(status_code=401, detail="Canvas 세션이 필요합니다.")
+
+    session_data = canvas_session_cache[user_id]
+    response = await _fetch_syllabus(session_data, course_id)
+
+    if response.status_code != 200:
+        try:
+            session_data = await refresh_canvas_session(user_id)
+            response = await _fetch_syllabus(session_data, course_id)
+        except Exception as e:
+            print(f"[Canvas] 세션 갱신 실패: {e}")
+            if user_id in canvas_session_cache:
+                del canvas_session_cache[user_id]
+            raise HTTPException(status_code=401, detail="Canvas 세션이 만료되었습니다.")
+
+    if response.status_code != 200:
+        raise HTTPException(status_code=401, detail="Canvas 세션이 만료되었습니다.")
+
+    return parse_syllabus_html(response.text)
+
+
