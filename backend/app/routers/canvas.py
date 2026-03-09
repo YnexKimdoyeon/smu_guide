@@ -694,3 +694,56 @@ async def get_board_posts(
     return response.json()
 
 
+async def _fetch_course_users(session_data: dict, course_id: int):
+    """과목 수강생 목록 조회 내부 함수"""
+    cookies = session_data.get('cookies', {})
+
+    async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'application/json',
+        }
+
+        response = await client.get(
+            f"https://canvas.sunmoon.ac.kr/api/v1/courses/{course_id}/users",
+            params={
+                "include_inactive": "true",
+                "include[]": ["avatar_url", "enrollments", "email"],
+                "per_page": "50",
+            },
+            headers=headers,
+            cookies=cookies
+        )
+        return response
+
+
+@router.get("/courses/{course_id}/users")
+async def get_course_users(
+    course_id: int,
+    current_user: User = Depends(get_current_user)
+):
+    """과목 수강생 목록 조회"""
+    user_id = current_user.id
+
+    if user_id not in canvas_session_cache:
+        raise HTTPException(status_code=401, detail="Canvas 세션이 필요합니다.")
+
+    session_data = canvas_session_cache[user_id]
+    response = await _fetch_course_users(session_data, course_id)
+
+    if response.status_code != 200:
+        try:
+            session_data = await refresh_canvas_session(user_id)
+            response = await _fetch_course_users(session_data, course_id)
+        except Exception as e:
+            print(f"[Canvas] 세션 갱신 실패: {e}")
+            if user_id in canvas_session_cache:
+                del canvas_session_cache[user_id]
+            raise HTTPException(status_code=401, detail="Canvas 세션이 만료되었습니다.")
+
+    if response.status_code != 200:
+        raise HTTPException(status_code=401, detail="Canvas 세션이 만료되었습니다.")
+
+    return response.json()
+
+

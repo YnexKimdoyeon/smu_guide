@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ArrowLeft, BookOpen, Video, FileText, MessageSquare, CheckCircle2, Clock, AlertCircle, Lock, Loader2, Bell, ChevronRight, LayoutList } from 'lucide-react'
+import { ArrowLeft, BookOpen, Video, FileText, MessageSquare, CheckCircle2, Clock, AlertCircle, Lock, Loader2, Bell, ChevronRight, LayoutList, Users } from 'lucide-react'
 import { canvasAPI } from '@/lib/api'
 
 interface TodoItem {
@@ -81,7 +81,17 @@ interface BoardPost {
   attachment_count?: number
 }
 
-type CourseTab = 'todo' | 'announcements' | 'boards'
+interface CourseUser {
+  id: number
+  name: string
+  avatar_url?: string
+  enrollments?: Array<{
+    type: string
+    enrollment_state?: string
+  }>
+}
+
+type CourseTab = 'todo' | 'announcements' | 'boards' | 'students'
 
 // Canvas 자격 증명 저장/조회 (자동 재로그인용)
 const CANVAS_CREDS_KEY = 'canvas_credentials'
@@ -143,6 +153,10 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
   const [boardPosts, setBoardPosts] = useState<BoardPost[]>([])
   const [loadingPosts, setLoadingPosts] = useState(false)
   const [selectedPost, setSelectedPost] = useState<BoardPost | null>(null)
+
+  // 수강생 관련 상태
+  const [courseUsers, setCourseUsers] = useState<CourseUser[]>([])
+  const [loadingUsers, setLoadingUsers] = useState(false)
 
   useEffect(() => {
     checkSessionAndLoad()
@@ -322,6 +336,9 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
     if (tab === 'boards' && selectedCourseId && boards.length === 0) {
       await loadBoards(selectedCourseId)
     }
+    if (tab === 'students' && selectedCourseId && courseUsers.length === 0) {
+      await loadCourseUsers(selectedCourseId)
+    }
   }
 
   // 과목별 공지사항 목록 조회
@@ -350,6 +367,20 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
       console.error('게시판 목록 조회 실패:', err)
     } finally {
       setLoadingBoards(false)
+    }
+  }
+
+  // 수강생 목록 조회
+  const loadCourseUsers = async (courseId: number) => {
+    setLoadingUsers(true)
+    setCourseUsers([])
+    try {
+      const data = await canvasAPI.getCourseUsers(courseId)
+      setCourseUsers(data || [])
+    } catch (err: any) {
+      console.error('수강생 목록 조회 실패:', err)
+    } finally {
+      setLoadingUsers(false)
     }
   }
 
@@ -522,6 +553,7 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
     setSelectedBoard(null)
     setBoardPosts([])
     setSelectedPost(null)
+    setCourseUsers([])
     setCourseTab('todo')
     loadData() // 자동 리프레시
   }
@@ -603,6 +635,17 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
             >
               <LayoutList className="w-4 h-4" />
               게시판
+            </button>
+            <button
+              onClick={() => handleCourseTabChange('students')}
+              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                courseTab === 'students'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-secondary text-secondary-foreground'
+              }`}
+            >
+              <Users className="w-4 h-4" />
+              학생
             </button>
           </div>
         </div>
@@ -690,6 +733,72 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {courseTab === 'students' && (
+            /* 학생 탭 */
+            <div className="p-4">
+              {loadingUsers ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                </div>
+              ) : courseUsers.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12">
+                  <Users className="w-12 h-12 text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">수강생 정보가 없습니다.</p>
+                </div>
+              ) : (() => {
+                const teachers = courseUsers.filter(u => u.enrollments?.some(e => e.type === 'TeacherEnrollment'))
+                const students = courseUsers.filter(u => u.enrollments?.every(e => e.type !== 'TeacherEnrollment'))
+                return (
+                  <div className="space-y-4">
+                    {teachers.length > 0 && (
+                      <div>
+                        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">교수</h3>
+                        <div className="space-y-2">
+                          {teachers.map(user => (
+                            <div key={user.id} className="bg-card rounded-xl p-3 border border-border/50 flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center overflow-hidden flex-shrink-0">
+                                {user.avatar_url && !user.avatar_url.includes('default') ? (
+                                  <img src={user.avatar_url} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                  <span className="text-sm font-bold text-primary">{user.name.charAt(0)}</span>
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-foreground truncate">{user.name}</p>
+                                <p className="text-xs text-primary">교수</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {students.length > 0 && (
+                      <div>
+                        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">학생 ({students.length}명)</h3>
+                        <div className="space-y-2">
+                          {students.map(user => (
+                            <div key={user.id} className="bg-card rounded-xl p-3 border border-border/50 flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-secondary flex items-center justify-center overflow-hidden flex-shrink-0">
+                                {user.avatar_url && !user.avatar_url.includes('default') ? (
+                                  <img src={user.avatar_url} alt="" className="w-full h-full object-cover" />
+                                ) : (
+                                  <span className="text-sm font-bold text-muted-foreground">{user.name.charAt(0)}</span>
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-foreground truncate">{user.name}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })()}
             </div>
           )}
 

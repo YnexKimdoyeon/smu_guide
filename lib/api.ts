@@ -581,6 +581,11 @@ export const canvasAPI = {
   getBoardPosts: async (courseId: number, boardId: number) => {
     return fetchCanvasWithAutoRetry(`/canvas/courses/${courseId}/boards/${boardId}/posts`)
   },
+
+  // 과목 수강생 목록 조회 (자동 재인증)
+  getCourseUsers: async (courseId: number) => {
+    return fetchCanvasWithAutoRetry(`/canvas/courses/${courseId}/users`)
+  },
 }
 
 // 식단 API
