@@ -626,7 +626,7 @@ async def _fetch_board_posts(session_data: dict, course_id: int, board_id: int):
 
         response = await client.get(
             f"https://canvas.sunmoon.ac.kr/learningx/api/v1/learningx_board/courses/{course_id}/boards/{board_id}/posts",
-            params={"page": "1", "per_page": "50"},
+            params={"page": "1", "filter": "title", "keyword": ""},
             headers=headers,
             cookies=cookies
         )

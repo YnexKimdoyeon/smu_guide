@@ -75,6 +75,10 @@ interface BoardPost {
   created_at: string
   view_count?: number
   comment_count?: number
+  content?: string
+  is_notice?: boolean
+  is_secret?: boolean
+  attachment_count?: number
 }
 
 type CourseTab = 'todo' | 'announcements' | 'boards'
@@ -138,6 +142,7 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
   const [selectedBoard, setSelectedBoard] = useState<Board | null>(null)
   const [boardPosts, setBoardPosts] = useState<BoardPost[]>([])
   const [loadingPosts, setLoadingPosts] = useState(false)
+  const [selectedPost, setSelectedPost] = useState<BoardPost | null>(null)
 
   useEffect(() => {
     checkSessionAndLoad()
@@ -356,8 +361,7 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
     setBoardPosts([])
     try {
       const data = await canvasAPI.getBoardPosts(selectedCourseId, board.id)
-      // API가 posts 배열을 직접 반환하거나, data 안에 있을 수 있음
-      const posts = Array.isArray(data) ? data : (data?.posts || data?.data || [])
+      const posts = Array.isArray(data) ? data : (data?.items || data?.posts || data?.data || [])
       setBoardPosts(posts)
     } catch (err: any) {
       console.error('게시글 목록 조회 실패:', err)
@@ -404,6 +408,57 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
     acc.todoCount += course.todo_list.length
     return acc
   }, { announcements: 0, movies: 0, assignments: 0, quizzes: 0, discussions: 0, todoCount: 0 })
+
+  // 게시글 상세 보기
+  if (selectedPost) {
+    return (
+      <div className="fixed inset-0 bg-background flex flex-col z-50">
+        <header className="flex-shrink-0 px-4 py-3 flex items-center gap-3 border-b border-border/50">
+          <button
+            onClick={() => setSelectedPost(null)}
+            className="w-10 h-10 rounded-full bg-card flex items-center justify-center hover:bg-muted transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5 text-foreground" />
+          </button>
+          <h1 className="text-lg font-semibold text-foreground truncate flex-1">게시글</h1>
+        </header>
+
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="bg-card rounded-2xl border border-border/50 overflow-hidden">
+            <div className="p-4 border-b border-border/30">
+              <h2 className="text-lg font-semibold text-foreground mb-2">
+                {selectedPost.title}
+              </h2>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                {selectedPost.user_name && <span>{selectedPost.user_name}</span>}
+                {selectedPost.created_at && (
+                  <>
+                    <span>·</span>
+                    <span>{formatBoardDate(selectedPost.created_at)}</span>
+                  </>
+                )}
+                {selectedPost.view_count !== undefined && (
+                  <>
+                    <span>·</span>
+                    <span>조회 {selectedPost.view_count}</span>
+                  </>
+                )}
+              </div>
+            </div>
+            {selectedPost.content && (
+              <div
+                className="p-4 prose prose-sm max-w-none text-foreground
+                  prose-p:my-2 prose-p:leading-relaxed
+                  prose-strong:text-foreground
+                  prose-a:text-primary prose-a:no-underline hover:prose-a:underline"
+                dangerouslySetInnerHTML={{ __html: selectedPost.content }}
+              />
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   // 공지사항 상세 모달
   if (showAnnouncementDetail && announcementDetail) {
@@ -466,6 +521,7 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
     setBoards([])
     setSelectedBoard(null)
     setBoardPosts([])
+    setSelectedPost(null)
     setCourseTab('todo')
     loadData() // 자동 리프레시
   }
@@ -663,25 +719,42 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
                   ) : (
                     <div className="space-y-2">
                       {boardPosts.map((post) => (
-                        <div
+                        <button
                           key={post.id}
-                          className="bg-card rounded-xl p-4 border border-border/50"
+                          onClick={() => setSelectedPost(post)}
+                          className="w-full bg-card rounded-xl p-4 border border-border/50 text-left hover:bg-muted/50 transition-colors"
                         >
-                          <h4 className="font-medium text-foreground text-sm line-clamp-2">
-                            {post.title}
-                          </h4>
-                          <div className="flex items-center gap-2 mt-1.5 text-xs text-muted-foreground">
-                            {post.user_name && <span>{post.user_name}</span>}
-                            {post.user_name && post.created_at && <span>·</span>}
-                            {post.created_at && <span>{formatBoardDate(post.created_at)}</span>}
-                            {post.view_count !== undefined && (
-                              <>
-                                <span>·</span>
-                                <span>조회 {post.view_count}</span>
-                              </>
-                            )}
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                {post.is_notice && (
+                                  <span className="px-1.5 py-0.5 rounded bg-red-500/10 text-red-600 text-[10px] font-medium flex-shrink-0">공지</span>
+                                )}
+                                <h4 className="font-medium text-foreground text-sm line-clamp-2">
+                                  {post.title}
+                                </h4>
+                              </div>
+                              <div className="flex items-center gap-2 mt-1.5 text-xs text-muted-foreground">
+                                {post.user_name && <span>{post.user_name}</span>}
+                                {post.user_name && post.created_at && <span>·</span>}
+                                {post.created_at && <span>{formatBoardDate(post.created_at)}</span>}
+                                {post.view_count !== undefined && (
+                                  <>
+                                    <span>·</span>
+                                    <span>조회 {post.view_count}</span>
+                                  </>
+                                )}
+                                {post.comment_count !== undefined && post.comment_count > 0 && (
+                                  <>
+                                    <span>·</span>
+                                    <span>댓글 {post.comment_count}</span>
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                            <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-1" />
                           </div>
-                        </div>
+                        </button>
                       ))}
                     </div>
                   )}
