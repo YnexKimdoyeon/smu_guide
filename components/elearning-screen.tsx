@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ArrowLeft, BookOpen, Video, FileText, MessageSquare, CheckCircle2, Clock, AlertCircle, Lock, Loader2, Bell, ChevronRight } from 'lucide-react'
+import { ArrowLeft, BookOpen, Video, FileText, MessageSquare, CheckCircle2, Clock, AlertCircle, Lock, Loader2, Bell, ChevronRight, LayoutList } from 'lucide-react'
 import { canvasAPI } from '@/lib/api'
 
 interface TodoItem {
@@ -60,7 +60,24 @@ interface ElearningScreenProps {
   onBack: () => void
 }
 
-type CourseTab = 'todo' | 'announcements'
+interface Board {
+  id: number
+  title: string
+  type: string
+  total_post_count: number
+  description?: string
+}
+
+interface BoardPost {
+  id: number
+  title: string
+  user_name?: string
+  created_at: string
+  view_count?: number
+  comment_count?: number
+}
+
+type CourseTab = 'todo' | 'announcements' | 'boards'
 
 // Canvas 자격 증명 저장/조회 (자동 재로그인용)
 const CANVAS_CREDS_KEY = 'canvas_credentials'
@@ -114,6 +131,13 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
   const [showAnnouncementDetail, setShowAnnouncementDetail] = useState(false)
   const [announcementDetail, setAnnouncementDetail] = useState<AnnouncementDetail | null>(null)
   const [loadingDetail, setLoadingDetail] = useState(false)
+
+  // 게시판 관련 상태
+  const [boards, setBoards] = useState<Board[]>([])
+  const [loadingBoards, setLoadingBoards] = useState(false)
+  const [selectedBoard, setSelectedBoard] = useState<Board | null>(null)
+  const [boardPosts, setBoardPosts] = useState<BoardPost[]>([])
+  const [loadingPosts, setLoadingPosts] = useState(false)
 
   useEffect(() => {
     checkSessionAndLoad()
@@ -284,11 +308,14 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
     }
   }
 
-  // 공지사항 탭 전환시 로드
+  // 탭 전환시 로드
   const handleCourseTabChange = async (tab: CourseTab) => {
     setCourseTab(tab)
     if (tab === 'announcements' && selectedCourseId && announcements.length === 0) {
       await loadAnnouncements(selectedCourseId)
+    }
+    if (tab === 'boards' && selectedCourseId && boards.length === 0) {
+      await loadBoards(selectedCourseId)
     }
   }
 
@@ -305,6 +332,43 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
     } finally {
       setLoadingAnnouncements(false)
     }
+  }
+
+  // 게시판 목록 조회
+  const loadBoards = async (courseId: number) => {
+    setLoadingBoards(true)
+    setBoards([])
+    try {
+      const data = await canvasAPI.getCourseBoards(courseId)
+      setBoards(data || [])
+    } catch (err: any) {
+      console.error('게시판 목록 조회 실패:', err)
+    } finally {
+      setLoadingBoards(false)
+    }
+  }
+
+  // 게시판 게시글 조회
+  const handleViewBoard = async (board: Board) => {
+    if (!selectedCourseId) return
+    setSelectedBoard(board)
+    setLoadingPosts(true)
+    setBoardPosts([])
+    try {
+      const data = await canvasAPI.getBoardPosts(selectedCourseId, board.id)
+      // API가 posts 배열을 직접 반환하거나, data 안에 있을 수 있음
+      const posts = Array.isArray(data) ? data : (data?.posts || data?.data || [])
+      setBoardPosts(posts)
+    } catch (err: any) {
+      console.error('게시글 목록 조회 실패:', err)
+    } finally {
+      setLoadingPosts(false)
+    }
+  }
+
+  const formatBoardDate = (dateStr: string): string => {
+    const date = new Date(dateStr)
+    return date.toLocaleDateString('ko-KR', { year: 'numeric', month: 'short', day: 'numeric' })
   }
 
   // 공지사항 상세 조회
@@ -399,6 +463,9 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
   const handleBackFromCourseDetail = () => {
     setShowCourseDetail(false)
     setAnnouncements([])
+    setBoards([])
+    setSelectedBoard(null)
+    setBoardPosts([])
     setCourseTab('todo')
     loadData() // 자동 리프레시
   }
@@ -470,12 +537,23 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
                 </span>
               )}
             </button>
+            <button
+              onClick={() => handleCourseTabChange('boards')}
+              className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all flex items-center justify-center gap-1.5 ${
+                courseTab === 'boards'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-secondary text-secondary-foreground'
+              }`}
+            >
+              <LayoutList className="w-4 h-4" />
+              게시판
+            </button>
           </div>
         </div>
 
         {/* 탭 컨텐츠 */}
         <div className="flex-1 overflow-y-auto">
-          {courseTab === 'todo' ? (
+          {courseTab === 'todo' && (
             /* 할 일 탭 */
             <div className="p-4">
               {todoList.length === 0 ? (
@@ -517,7 +595,9 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
                 </div>
               )}
             </div>
-          ) : (
+          )}
+
+          {courseTab === 'announcements' && (
             /* 공지 탭 */
             <div className="p-4">
               {loadingAnnouncements ? (
@@ -553,6 +633,102 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
                     </button>
                   ))}
                 </div>
+              )}
+            </div>
+          )}
+
+          {courseTab === 'boards' && (
+            /* 게시판 탭 */
+            <div className="p-4">
+              {selectedBoard ? (
+                /* 게시글 목록 */
+                <div>
+                  <button
+                    onClick={() => { setSelectedBoard(null); setBoardPosts([]) }}
+                    className="flex items-center gap-2 text-sm text-primary mb-3 hover:underline"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                    게시판 목록으로
+                  </button>
+                  <h3 className="text-sm font-semibold text-foreground mb-3">{selectedBoard.title}</h3>
+                  {loadingPosts ? (
+                    <div className="flex items-center justify-center py-12">
+                      <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                    </div>
+                  ) : boardPosts.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12">
+                      <FileText className="w-12 h-12 text-muted-foreground mb-4" />
+                      <p className="text-muted-foreground">게시글이 없습니다.</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {boardPosts.map((post) => (
+                        <div
+                          key={post.id}
+                          className="bg-card rounded-xl p-4 border border-border/50"
+                        >
+                          <h4 className="font-medium text-foreground text-sm line-clamp-2">
+                            {post.title}
+                          </h4>
+                          <div className="flex items-center gap-2 mt-1.5 text-xs text-muted-foreground">
+                            {post.user_name && <span>{post.user_name}</span>}
+                            {post.user_name && post.created_at && <span>·</span>}
+                            {post.created_at && <span>{formatBoardDate(post.created_at)}</span>}
+                            {post.view_count !== undefined && (
+                              <>
+                                <span>·</span>
+                                <span>조회 {post.view_count}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* 게시판 목록 */
+                loadingBoards ? (
+                  <div className="flex items-center justify-center py-12">
+                    <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                  </div>
+                ) : boards.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-12">
+                    <LayoutList className="w-12 h-12 text-muted-foreground mb-4" />
+                    <p className="text-muted-foreground">게시판이 없습니다.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {boards.map((board) => (
+                      <button
+                        key={board.id}
+                        onClick={() => handleViewBoard(board)}
+                        className="w-full bg-card rounded-xl p-4 border border-border/50 text-left hover:bg-muted/50 transition-colors"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-medium text-foreground text-sm truncate">
+                              {board.title}
+                            </h3>
+                            {board.description && (
+                              <p className="text-xs text-muted-foreground mt-1 line-clamp-1"
+                                dangerouslySetInnerHTML={{ __html: board.description }}
+                              />
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            {board.total_post_count > 0 && (
+                              <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium">
+                                {board.total_post_count}
+                              </span>
+                            )}
+                            <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )
               )}
             </div>
           )}

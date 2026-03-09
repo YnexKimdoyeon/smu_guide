@@ -571,6 +571,16 @@ export const canvasAPI = {
   getAnnouncement: async (courseId: number, topicId: number) => {
     return fetchCanvasWithAutoRetry(`/canvas/announcements/${courseId}/${topicId}`)
   },
+
+  // 과목별 게시판 목록 조회 (자동 재인증)
+  getCourseBoards: async (courseId: number) => {
+    return fetchCanvasWithAutoRetry(`/canvas/courses/${courseId}/boards`)
+  },
+
+  // 게시판 게시글 목록 조회 (자동 재인증)
+  getBoardPosts: async (courseId: number, boardId: number) => {
+    return fetchCanvasWithAutoRetry(`/canvas/courses/${courseId}/boards/${boardId}/posts`)
+  },
 }
 
 // 식단 API

@@ -588,3 +588,109 @@ async def get_canvas_announcement(
     return announcement
 
 
+async def _fetch_boards(session_data: dict, course_id: int):
+    """과목 게시판 목록 조회 내부 함수"""
+    cookies = session_data.get('cookies', {})
+    xn_api_token = session_data.get('xn_api_token', '')
+
+    async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'application/json',
+            'Referer': 'https://canvas.sunmoon.ac.kr/learningx/lti/dashboard'
+        }
+        if xn_api_token:
+            headers['Authorization'] = f'Bearer {xn_api_token}'
+
+        response = await client.get(
+            f"https://canvas.sunmoon.ac.kr/learningx/api/v1/learningx_board/courses/{course_id}/boards",
+            headers=headers,
+            cookies=cookies
+        )
+        return response
+
+
+async def _fetch_board_posts(session_data: dict, course_id: int, board_id: int):
+    """게시판 게시글 목록 조회 내부 함수"""
+    cookies = session_data.get('cookies', {})
+    xn_api_token = session_data.get('xn_api_token', '')
+
+    async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept': 'application/json',
+            'Referer': 'https://canvas.sunmoon.ac.kr/learningx/lti/dashboard'
+        }
+        if xn_api_token:
+            headers['Authorization'] = f'Bearer {xn_api_token}'
+
+        response = await client.get(
+            f"https://canvas.sunmoon.ac.kr/learningx/api/v1/learningx_board/courses/{course_id}/boards/{board_id}/posts",
+            params={"page": "1", "per_page": "50"},
+            headers=headers,
+            cookies=cookies
+        )
+        return response
+
+
+@router.get("/courses/{course_id}/boards")
+async def get_course_boards(
+    course_id: int,
+    current_user: User = Depends(get_current_user)
+):
+    """과목별 게시판 목록 조회"""
+    user_id = current_user.id
+
+    if user_id not in canvas_session_cache:
+        raise HTTPException(status_code=401, detail="Canvas 세션이 필요합니다.")
+
+    session_data = canvas_session_cache[user_id]
+    response = await _fetch_boards(session_data, course_id)
+
+    if response.status_code != 200:
+        try:
+            session_data = await refresh_canvas_session(user_id)
+            response = await _fetch_boards(session_data, course_id)
+        except Exception as e:
+            print(f"[Canvas] 세션 갱신 실패: {e}")
+            if user_id in canvas_session_cache:
+                del canvas_session_cache[user_id]
+            raise HTTPException(status_code=401, detail="Canvas 세션이 만료되었습니다.")
+
+    if response.status_code != 200:
+        raise HTTPException(status_code=401, detail="Canvas 세션이 만료되었습니다.")
+
+    return response.json()
+
+
+@router.get("/courses/{course_id}/boards/{board_id}/posts")
+async def get_board_posts(
+    course_id: int,
+    board_id: int,
+    current_user: User = Depends(get_current_user)
+):
+    """게시판 게시글 목록 조회"""
+    user_id = current_user.id
+
+    if user_id not in canvas_session_cache:
+        raise HTTPException(status_code=401, detail="Canvas 세션이 필요합니다.")
+
+    session_data = canvas_session_cache[user_id]
+    response = await _fetch_board_posts(session_data, course_id, board_id)
+
+    if response.status_code != 200:
+        try:
+            session_data = await refresh_canvas_session(user_id)
+            response = await _fetch_board_posts(session_data, course_id, board_id)
+        except Exception as e:
+            print(f"[Canvas] 세션 갱신 실패: {e}")
+            if user_id in canvas_session_cache:
+                del canvas_session_cache[user_id]
+            raise HTTPException(status_code=401, detail="Canvas 세션이 만료되었습니다.")
+
+    if response.status_code != 200:
+        raise HTTPException(status_code=401, detail="Canvas 세션이 만료되었습니다.")
+
+    return response.json()
+
+
