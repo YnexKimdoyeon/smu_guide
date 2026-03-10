@@ -23,6 +23,7 @@ from app.models import phonebook as phonebook_model, friend as friend_model
 from app.models import block as block_model, club as club_model, meeting as meeting_model
 from app.models import notification as notification_model, dotori as dotori_model
 from app.models import quick_room as quick_room_model
+from app.models.quick_room import QuickRoom
 
 # 데이터베이스 테이블 생성
 Base.metadata.create_all(bind=engine)
@@ -794,6 +795,25 @@ scheduler.add_job(sync_run_crawler, 'interval', hours=1)
 scheduler.add_job(cleanup_old_commute_groups, 'cron', hour=0, minute=0)
 # 매일 자정에 도토리 랭킹 캐시 갱신 (KST 자정 = UTC 15:00)
 scheduler.add_job(refresh_dotori_ranking_cache, 'cron', hour=0, minute=5)
+
+
+def cleanup_quick_rooms():
+    """자정에 모든 급하게 매칭 방 비활성화"""
+    db = SessionLocal()
+    try:
+        count = db.query(QuickRoom).filter(QuickRoom.is_active == 1).update({QuickRoom.is_active: 0})
+        db.commit()
+        if count > 0:
+            print(f"[QuickRoom] 자정 정리: {count}개 방 비활성화")
+    except Exception as e:
+        db.rollback()
+        print(f"[QuickRoom] 자정 정리 실패: {e}")
+    finally:
+        db.close()
+
+
+# 매일 자정에 급하게 매칭 방 정리
+scheduler.add_job(cleanup_quick_rooms, 'cron', hour=0, minute=0)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

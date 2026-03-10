@@ -74,13 +74,26 @@ def create_room(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """방 생성"""
+    """방 생성 (1인 1방 제한 - 기존 방은 자동 삭제)"""
     if not data.title.strip():
         raise HTTPException(status_code=400, detail="방 제목을 입력하세요")
     if not data.departure.strip():
         raise HTTPException(status_code=400, detail="출발지를 입력하세요")
     if not data.destination.strip():
         raise HTTPException(status_code=400, detail="도착지를 입력하세요")
+
+    # 기존에 만든 활성 방이 있으면 비활성화
+    existing_room = db.query(QuickRoom).filter(
+        QuickRoom.creator_id == current_user.id,
+        QuickRoom.is_active == 1
+    ).first()
+    if existing_room:
+        existing_room.is_active = 0
+        # 기존 방 멤버도 정리
+        db.query(QuickRoomMember).filter(
+            QuickRoomMember.room_id == existing_room.id
+        ).delete()
+        db.commit()
 
     room = QuickRoom(
         creator_id=current_user.id,
