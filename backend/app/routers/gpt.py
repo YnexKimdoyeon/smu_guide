@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.session_store import save_credentials, load_credentials, remove_credentials
 from app.models.user import User
 
 router = APIRouter(prefix="/gpt", tags=["GPT 챗봇"])
@@ -116,11 +117,19 @@ async def chat_with_gpt(
     user_id = current_user.id
 
     if user_id not in session_cache:
-        # 새 세션 필요 - 비밀번호가 필요하므로 에러
-        raise HTTPException(
-            status_code=401,
-            detail="GPT 세션이 필요합니다. 먼저 /gpt/init을 호출하세요."
-        )
+        # 저장된 자격 증명으로 세션 복원 시도
+        creds = load_credentials('gpt', user_id)
+        if creds and creds.get('password'):
+            try:
+                print(f"[GPT] 저장된 자격 증명으로 세션 복원: user_id={user_id}")
+                cookies = await get_gpt_session(current_user.student_id, creds['password'])
+                session_cache[user_id] = cookies
+            except Exception as e:
+                print(f"[GPT] 세션 복원 실패: {e}")
+                remove_credentials('gpt', user_id)
+                raise HTTPException(status_code=401, detail="GPT 세션이 필요합니다. 먼저 /gpt/init을 호출하세요.")
+        else:
+            raise HTTPException(status_code=401, detail="GPT 세션이 필요합니다. 먼저 /gpt/init을 호출하세요.")
 
     cookies = session_cache[user_id]
 
@@ -185,6 +194,8 @@ async def init_gpt_session(
     try:
         cookies = await get_gpt_session(current_user.student_id, request.password)
         session_cache[current_user.id] = cookies
+        # 자격 증명 영속화
+        save_credentials('gpt', current_user.id, {'password': request.password})
         return {"message": "GPT 세션이 초기화되었습니다"}
     except HTTPException:
         raise
@@ -196,4 +207,8 @@ async def init_gpt_session(
 async def get_gpt_status(current_user: User = Depends(get_current_user)):
     """GPT 세션 상태 확인"""
     is_active = current_user.id in session_cache
+    if not is_active:
+        creds = load_credentials('gpt', current_user.id)
+        if creds and creds.get('password'):
+            is_active = True
     return {"active": is_active}

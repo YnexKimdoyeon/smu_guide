@@ -17,6 +17,7 @@ from app.models.schedule import Schedule
 from app.routers.gpt import get_gpt_session, session_cache as gpt_session_cache
 from app.routers.canvas import login_canvas, canvas_session_cache
 from app.routers.scholarship import folio_credentials_cache
+from app.core.session_store import save_credentials
 
 router = APIRouter(prefix="/sunmoon", tags=["선문대 연동"])
 
@@ -520,6 +521,10 @@ async def login_with_sunmoon(
                 canvas_session['username'] = login_data.student_id
                 canvas_session['password'] = login_data.password
                 canvas_session_cache[user.id] = canvas_session
+                save_credentials('canvas', user.id, {
+                    'username': login_data.student_id,
+                    'password': login_data.password
+                })
                 print(f"[Canvas] 세션 자동 초기화 성공: user_id={user.id}")
             except Exception as e:
                 print(f"[Canvas] 세션 자동 초기화 실패: {str(e)}")
@@ -529,6 +534,11 @@ async def login_with_sunmoon(
                 'login_id': login_data.student_id,
                 'password': login_data.password
             }
+            save_credentials('folio', user.id, {
+                'login_id': login_data.student_id,
+                'password': login_data.password
+            })
+            save_credentials('gpt', user.id, {'password': login_data.password})
             print(f"[Folio] 자격증명 저장 완료: user_id={user.id}")
 
             # 로그인 성공 - 시도 횟수 초기화

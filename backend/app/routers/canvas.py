@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.session_store import save_credentials, load_credentials, remove_credentials
 from app.models.user import User
 
 # RSA 암호화를 위한 라이브러리
@@ -30,6 +31,20 @@ canvas_session_cache: Dict[int, dict] = {}
 async def ensure_canvas_session(user_id: int) -> dict:
     """Canvas 세션 확인 및 필요시 재로그인"""
     if user_id not in canvas_session_cache:
+        # 파일에서 자격 증명 복원 시도
+        creds = load_credentials('canvas', user_id)
+        if creds and creds.get('username') and creds.get('password'):
+            try:
+                print(f"[Canvas] 저장된 자격 증명으로 세션 복원: user_id={user_id}")
+                session_data = await login_canvas(creds['username'], creds['password'])
+                session_data['username'] = creds['username']
+                session_data['password'] = creds['password']
+                canvas_session_cache[user_id] = session_data
+                return session_data
+            except Exception as e:
+                print(f"[Canvas] 세션 복원 실패: {e}")
+                remove_credentials('canvas', user_id)
+
         raise HTTPException(status_code=401, detail="Canvas 세션이 필요합니다. 먼저 로그인하세요.")
 
     return canvas_session_cache[user_id]
@@ -37,10 +52,7 @@ async def ensure_canvas_session(user_id: int) -> dict:
 
 async def refresh_canvas_session(user_id: int) -> dict:
     """저장된 자격 증명으로 Canvas 세션 갱신"""
-    if user_id not in canvas_session_cache:
-        raise HTTPException(status_code=401, detail="Canvas 세션이 필요합니다.")
-
-    session_data = canvas_session_cache[user_id]
+    session_data = await ensure_canvas_session(user_id)
     username = session_data.get('username')
     password = session_data.get('password')
 
@@ -261,6 +273,11 @@ async def init_canvas_session(
         session_data['username'] = request.username
         session_data['password'] = request.password
         canvas_session_cache[current_user.id] = session_data
+        # 자격 증명 영속화 (서버 재시작 시 자동 복원용)
+        save_credentials('canvas', current_user.id, {
+            'username': request.username,
+            'password': request.password
+        })
         print(f"[Canvas] 세션 초기화 성공: user_id={current_user.id}")
         return {"message": "Canvas 세션이 초기화되었습니다"}
     except HTTPException:
@@ -274,6 +291,11 @@ async def init_canvas_session(
 async def get_canvas_status(current_user: User = Depends(get_current_user)):
     """Canvas 세션 상태 확인"""
     is_active = current_user.id in canvas_session_cache
+    # 메모리에 없어도 저장된 자격 증명이 있으면 복원 가능
+    if not is_active:
+        creds = load_credentials('canvas', current_user.id)
+        if creds and creds.get('username') and creds.get('password'):
+            is_active = True  # 자동 복원 가능
     return {"active": is_active}
 
 
@@ -309,10 +331,7 @@ async def get_canvas_todos(
     """Canvas 할 일 목록 조회 (세션 만료 시 자동 갱신)"""
     user_id = current_user.id
 
-    if user_id not in canvas_session_cache:
-        raise HTTPException(status_code=401, detail="Canvas 세션이 필요합니다. 먼저 로그인하세요.")
-
-    session_data = canvas_session_cache[user_id]
+    session_data = await ensure_canvas_session(user_id)
 
     # 첫 번째 시도
     response = await _fetch_todos(session_data)
@@ -363,10 +382,7 @@ async def get_canvas_courses(
     """Canvas 수강 과목 목록 조회 (세션 만료 시 자동 갱신)"""
     user_id = current_user.id
 
-    if user_id not in canvas_session_cache:
-        raise HTTPException(status_code=401, detail="Canvas 세션이 필요합니다.")
-
-    session_data = canvas_session_cache[user_id]
+    session_data = await ensure_canvas_session(user_id)
 
     # 첫 번째 시도
     response = await _fetch_courses(session_data)
@@ -523,10 +539,7 @@ async def get_course_announcements(
     """과목별 공지사항 목록 조회"""
     user_id = current_user.id
 
-    if user_id not in canvas_session_cache:
-        raise HTTPException(status_code=401, detail="Canvas 세션이 필요합니다.")
-
-    session_data = canvas_session_cache[user_id]
+    session_data = await ensure_canvas_session(user_id)
 
     # 첫 번째 시도
     response = await _fetch_announcements_list(session_data, course_id)
@@ -558,10 +571,7 @@ async def get_canvas_announcement(
     """Canvas 공지사항 상세 조회"""
     user_id = current_user.id
 
-    if user_id not in canvas_session_cache:
-        raise HTTPException(status_code=401, detail="Canvas 세션이 필요합니다.")
-
-    session_data = canvas_session_cache[user_id]
+    session_data = await ensure_canvas_session(user_id)
 
     # 첫 번째 시도
     response = await _fetch_announcement(session_data, course_id, topic_id)
@@ -641,10 +651,7 @@ async def get_course_boards(
     """과목별 게시판 목록 조회"""
     user_id = current_user.id
 
-    if user_id not in canvas_session_cache:
-        raise HTTPException(status_code=401, detail="Canvas 세션이 필요합니다.")
-
-    session_data = canvas_session_cache[user_id]
+    session_data = await ensure_canvas_session(user_id)
     response = await _fetch_boards(session_data, course_id)
 
     if response.status_code != 200:
@@ -672,10 +679,7 @@ async def get_board_posts(
     """게시판 게시글 목록 조회"""
     user_id = current_user.id
 
-    if user_id not in canvas_session_cache:
-        raise HTTPException(status_code=401, detail="Canvas 세션이 필요합니다.")
-
-    session_data = canvas_session_cache[user_id]
+    session_data = await ensure_canvas_session(user_id)
     response = await _fetch_board_posts(session_data, course_id, board_id)
 
     if response.status_code != 200:
@@ -725,10 +729,7 @@ async def get_course_users(
     """과목 수강생 목록 조회"""
     user_id = current_user.id
 
-    if user_id not in canvas_session_cache:
-        raise HTTPException(status_code=401, detail="Canvas 세션이 필요합니다.")
-
-    session_data = canvas_session_cache[user_id]
+    session_data = await ensure_canvas_session(user_id)
     response = await _fetch_course_users(session_data, course_id)
 
     if response.status_code != 200:
@@ -809,10 +810,7 @@ async def get_course_syllabus(
     """과목 수업 계획서 조회"""
     user_id = current_user.id
 
-    if user_id not in canvas_session_cache:
-        raise HTTPException(status_code=401, detail="Canvas 세션이 필요합니다.")
-
-    session_data = canvas_session_cache[user_id]
+    session_data = await ensure_canvas_session(user_id)
     response = await _fetch_syllabus(session_data, course_id)
 
     if response.status_code != 200:

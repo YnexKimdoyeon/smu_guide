@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.session_store import load_credentials
 from app.models.user import User
 from sqlalchemy.orm import Session
 
@@ -154,13 +155,20 @@ async def get_mileage(
     마일리지 조회
     - year: 조회 연도 (2025, 2026 등)
     """
-    # 저장된 자격증명 확인
+    # 저장된 자격증명 확인 (메모리 → 파일 순서)
     credentials = folio_credentials_cache.get(current_user.id)
     if not credentials:
-        raise HTTPException(
-            status_code=401,
-            detail="세션이 만료되었습니다. 앱을 재시작하거나 다시 로그인해주세요."
-        )
+        # 파일에서 복원 시도
+        stored = load_credentials('folio', current_user.id)
+        if stored and stored.get('login_id') and stored.get('password'):
+            credentials = {'login_id': stored['login_id'], 'password': stored['password']}
+            folio_credentials_cache[current_user.id] = credentials
+            print(f"[Folio] 저장된 자격 증명으로 복원: user_id={current_user.id}")
+        else:
+            raise HTTPException(
+                status_code=401,
+                detail="세션이 만료되었습니다. 앱을 재시작하거나 다시 로그인해주세요."
+            )
 
     async with httpx.AsyncClient(verify=False, timeout=30.0, follow_redirects=True) as client:
         headers = {
