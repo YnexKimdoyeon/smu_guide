@@ -13,6 +13,8 @@ from app.core.config import settings
 from app.routers import auth, schedule, chat, commute, announcement, phonebook, friend, sunmoon, random_chat, ws_chat, block, gpt, canvas, cafeteria, club, meeting, scholarship, notification, shuttle, admin, banner, dotori, quick_room
 from app.models.commute import CommuteSchedule, CommuteGroup, CommuteGroupMember
 from app.models.user import User
+from app.models.club import Club, ClubApplication
+from app.models.meeting import Meeting, MeetingApplication
 from app.services.crawler import sync_run_crawler
 from app.services.push import send_push_sync
 
@@ -915,6 +917,115 @@ def seed_demo_commute_group():
 scheduler.add_job(seed_demo_commute_group, 'cron', hour=0, minute=1)
 
 
+def seed_demo_club():
+    """앱스토어 심사용 데모 동아리 홍보 생성"""
+    db = SessionLocal()
+    try:
+        # 데모 사용자 확인 (seed_demo_commute_group에서 이미 생성됨)
+        demo_user = db.query(User).filter(User.student_id == "DEMO_001").first()
+        if not demo_user:
+            demo_user = User(
+                student_id="DEMO_001",
+                password="demo_no_login",
+                name="이서연",
+                department="컴퓨터공학과",
+            )
+            db.add(demo_user)
+            db.commit()
+            db.refresh(demo_user)
+
+        # 이미 데모 동아리가 있으면 스킵
+        existing = db.query(Club).filter(
+            Club.user_id == demo_user.id,
+            Club.name == "선문 코딩 동아리"
+        ).first()
+        if existing:
+            print("[Demo] 데모 동아리가 이미 존재합니다")
+            return
+
+        club = Club(
+            user_id=demo_user.id,
+            name="선문 코딩 동아리",
+            description="함께 코딩하고 프로젝트를 만들어봐요!\n\n활동 내용:\n- 매주 토요일 스터디\n- 해커톤 참가\n- 포트폴리오 제작\n\n누구나 환영합니다!",
+            qna_questions=["자기소개를 해주세요", "관심 있는 프로그래밍 언어가 있나요?"],
+        )
+        db.add(club)
+        db.commit()
+        db.refresh(club)
+
+        # 김도연이 신청한 것처럼 데모 신청 추가
+        main_user = db.query(User).filter(User.name == "김도연").first()
+        if main_user:
+            app_exists = db.query(ClubApplication).filter(
+                ClubApplication.club_id == club.id,
+                ClubApplication.user_id == main_user.id
+            ).first()
+            if not app_exists:
+                application = ClubApplication(
+                    club_id=club.id,
+                    user_id=main_user.id,
+                    name=main_user.name,
+                    student_id=main_user.student_id,
+                    qna_answers={"자기소개를 해주세요": "안녕하세요! 웹 개발에 관심이 많습니다.", "관심 있는 프로그래밍 언어가 있나요?": "Python, JavaScript"},
+                )
+                db.add(application)
+                db.commit()
+
+        print(f"[Demo] 데모 동아리 생성 완료 (club_id={club.id})")
+
+    except Exception as e:
+        print(f"[Demo] 데모 동아리 생성 오류: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
+def seed_demo_meeting():
+    """앱스토어 심사용 데모 과팅 생성"""
+    db = SessionLocal()
+    try:
+        # 데모 사용자 확인
+        demo_user = db.query(User).filter(User.student_id == "DEMO_002").first()
+        if not demo_user:
+            demo_user = User(
+                student_id="DEMO_002",
+                password="demo_no_login",
+                name="박지호",
+                department="간호학과",
+            )
+            db.add(demo_user)
+            db.commit()
+            db.refresh(demo_user)
+
+        # 이미 데모 과팅이 있으면 스킵
+        existing = db.query(Meeting).filter(
+            Meeting.user_id == demo_user.id,
+            Meeting.status == "open"
+        ).first()
+        if existing:
+            print("[Demo] 데모 과팅이 이미 존재합니다")
+            return
+
+        meeting = Meeting(
+            user_id=demo_user.id,
+            department="간호학과",
+            member_count=3,
+            description="저희 과에서 3명이서 같이 놀 분 구해요! 편하게 신청해주세요~",
+            status="open",
+        )
+        db.add(meeting)
+        db.commit()
+        db.refresh(meeting)
+
+        print(f"[Demo] 데모 과팅 생성 완료 (meeting_id={meeting.id})")
+
+    except Exception as e:
+        print(f"[Demo] 데모 과팅 생성 오류: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 시작 시 스케줄러 시작
@@ -925,8 +1036,10 @@ async def lifespan(app: FastAPI):
     import asyncio
     asyncio.create_task(run_crawler())
 
-    # 데모 등하교 그룹 시드
+    # 데모 데이터 시드
     seed_demo_commute_group()
+    seed_demo_club()
+    seed_demo_meeting()
 
     yield
 
