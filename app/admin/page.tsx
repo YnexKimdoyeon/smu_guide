@@ -24,6 +24,16 @@ interface UserSummary {
   schedule_count: number
   chat_count: number
   friend_count: number
+  dotori_point: number
+}
+
+interface StatsDetailItem {
+  [key: string]: any
+}
+
+interface StatsDetail {
+  title: string
+  items: StatsDetailItem[]
 }
 
 interface UserDetail {
@@ -175,6 +185,14 @@ export default function AdminPage() {
   const [isSavingBanner, setIsSavingBanner] = useState(false)
   const [currentMainBanner, setCurrentMainBanner] = useState<any>(null)
   const [currentPopup, setCurrentPopup] = useState<any>(null)
+
+  // 정렬 관련 상태
+  const [sortBy, setSortBy] = useState<'created_at' | 'dotori'>('created_at')
+
+  // 통계 상세 모달 관련 상태
+  const [showStatsModal, setShowStatsModal] = useState(false)
+  const [statsDetail, setStatsDetail] = useState<StatsDetail | null>(null)
+  const [isLoadingStats, setIsLoadingStats] = useState(false)
 
   // 기존 세션 확인
   useEffect(() => {
@@ -450,11 +468,35 @@ export default function AdminPage() {
     )
   }
 
-  const filteredUsers = users.filter(user =>
-    user.name.includes(searchQuery) ||
-    user.student_id.includes(searchQuery) ||
-    user.department.includes(searchQuery)
-  )
+  const loadStatsDetail = async (category: string) => {
+    setIsLoadingStats(true)
+    try {
+      const data = await adminAPI.getStatsDetail(category)
+      setStatsDetail(data)
+      setShowStatsModal(true)
+    } catch (err) {
+      console.error('통계 상세 로드 실패:', err)
+      alert('통계 상세 정보를 불러오는데 실패했습니다.')
+    } finally {
+      setIsLoadingStats(false)
+    }
+  }
+
+  const filteredUsers = users
+    .filter(user =>
+      user.name.includes(searchQuery) ||
+      user.student_id.includes(searchQuery) ||
+      user.department.includes(searchQuery)
+    )
+    .sort((a, b) => {
+      if (sortBy === 'dotori') {
+        return b.dotori_point - a.dotori_point
+      }
+      // 기본: 가입일 최신순
+      const dateA = a.created_at ? new Date(a.created_at).getTime() : 0
+      const dateB = b.created_at ? new Date(b.created_at).getTime() : 0
+      return dateB - dateA
+    })
 
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '-'
@@ -823,6 +865,76 @@ export default function AdminPage() {
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-4 md:p-8">
+      {/* 통계 상세 모달 */}
+      {showStatsModal && statsDetail && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-gray-800 rounded-2xl p-6 w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-lg">{statsDetail.title}</h3>
+              <button
+                onClick={() => setShowStatsModal(false)}
+                className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto flex-1">
+              {statsDetail.items.length === 0 ? (
+                <p className="text-gray-500 text-center py-8">데이터가 없습니다.</p>
+              ) : (
+                <div className="space-y-2">
+                  {statsDetail.items.map((item, index) => (
+                    <div key={index} className="bg-gray-700/50 rounded-lg p-3 text-sm">
+                      <div className="flex flex-wrap gap-3">
+                        {Object.entries(item).map(([key, value]) => (
+                          <div key={key} className="flex items-center gap-1">
+                            <span className="text-gray-400 text-xs">
+                              {key === 'name' ? '이름' :
+                               key === 'student_id' ? '학번' :
+                               key === 'department' ? '학과' :
+                               key === 'created_at' ? '날짜' :
+                               key === 'count' ? '개수' :
+                               key === 'user_name' ? '유저' :
+                               key === 'room_name' ? '채팅방' :
+                               key === 'room_id' ? '방ID' :
+                               key === 'message' ? '메시지' :
+                               key === 'user1_name' ? '유저1' :
+                               key === 'user2_name' ? '유저2' :
+                               key === 'description' ? '설명' :
+                               key === 'creator' ? '생성자' :
+                               key === 'member_count' ? '인원' :
+                               key === 'status' ? '상태' :
+                               key === 'reporter' ? '신고자' :
+                               key === 'reported' ? '피신고자' :
+                               key === 'reason' ? '사유' :
+                               key === 'detail' ? '상세' :
+                               key}:
+                            </span>
+                            <span className={key === 'message' || key === 'description' || key === 'detail' ? 'text-gray-300' : 'text-white'}>
+                              {key === 'created_at' && value ? formatDate(value as string) : String(value || '-')}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-gray-700">
+              <button
+                onClick={() => setShowStatsModal(false)}
+                className="w-full py-3 rounded-xl bg-gray-700 text-gray-300 hover:bg-gray-600 transition-colors"
+              >
+                닫기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 푸시 알림 모달 */}
       {showPushModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
@@ -1094,20 +1206,20 @@ export default function AdminPage() {
       {/* 통계 */}
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          <StatCard icon={Users} label="총 유저" value={stats.total_users} color="blue" />
-          <StatCard icon={Calendar} label="시간표" value={stats.total_schedules} color="green" />
-          <StatCard icon={MessageCircle} label="채팅 메시지" value={stats.total_chat_messages} color="purple" />
-          <StatCard icon={MessageCircle} label="랜덤 채팅" value={stats.total_random_messages} color="pink" />
-          <StatCard icon={UserPlus} label="친구 관계" value={stats.total_friends} color="cyan" />
-          <StatCard icon={Building2} label="동아리" value={stats.total_clubs} color="orange" />
-          <StatCard icon={Heart} label="과팅" value={stats.total_meetings} color="red" />
-          <StatCard icon={AlertTriangle} label="신고" value={stats.total_reports} color="yellow" />
+          <StatCard icon={Users} label="총 유저" value={stats.total_users} color="blue" onClick={() => loadStatsDetail('users')} />
+          <StatCard icon={Calendar} label="시간표" value={stats.total_schedules} color="green" onClick={() => loadStatsDetail('schedules')} />
+          <StatCard icon={MessageCircle} label="채팅 메시지" value={stats.total_chat_messages} color="purple" onClick={() => loadStatsDetail('chat_messages')} />
+          <StatCard icon={MessageCircle} label="랜덤 채팅" value={stats.total_random_messages} color="pink" onClick={() => loadStatsDetail('random_messages')} />
+          <StatCard icon={UserPlus} label="친구 관계" value={stats.total_friends} color="cyan" onClick={() => loadStatsDetail('friends')} />
+          <StatCard icon={Building2} label="동아리" value={stats.total_clubs} color="orange" onClick={() => loadStatsDetail('clubs')} />
+          <StatCard icon={Heart} label="과팅" value={stats.total_meetings} color="red" onClick={() => loadStatsDetail('meetings')} />
+          <StatCard icon={AlertTriangle} label="신고" value={stats.total_reports} color="yellow" onClick={() => loadStatsDetail('reports')} />
         </div>
       )}
 
-      {/* 검색 */}
-      <div className="mb-6">
-        <div className="relative">
+      {/* 검색 및 정렬 */}
+      <div className="mb-6 flex gap-4 items-center">
+        <div className="relative flex-1">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input
             type="text"
@@ -1116,6 +1228,29 @@ export default function AdminPage() {
             placeholder="이름, 학번, 학과로 검색..."
             className="w-full pl-12 pr-4 py-3 rounded-xl bg-gray-800 text-white placeholder-gray-400 border border-gray-700 focus:border-primary focus:outline-none"
           />
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setSortBy('created_at')}
+            className={`px-4 py-3 rounded-xl text-sm font-medium transition-colors ${
+              sortBy === 'created_at'
+                ? 'bg-primary text-white'
+                : 'bg-gray-800 text-gray-400 hover:text-white'
+            }`}
+          >
+            가입일순
+          </button>
+          <button
+            onClick={() => setSortBy('dotori')}
+            className={`px-4 py-3 rounded-xl text-sm font-medium transition-colors flex items-center gap-1 ${
+              sortBy === 'dotori'
+                ? 'bg-amber-500 text-white'
+                : 'bg-gray-800 text-gray-400 hover:text-white'
+            }`}
+          >
+            <Nut className="w-4 h-4" />
+            도토리순
+          </button>
         </div>
       </div>
 
@@ -1155,6 +1290,7 @@ export default function AdminPage() {
                 <th className="text-left py-4 px-4">이름</th>
                 <th className="text-left py-4 px-4">학과</th>
                 <th className="text-left py-4 px-4">가입일</th>
+                <th className="text-center py-4 px-4">도토리</th>
                 <th className="text-center py-4 px-4">시간표</th>
                 <th className="text-center py-4 px-4">채팅</th>
                 <th className="text-center py-4 px-4">친구</th>
@@ -1177,6 +1313,9 @@ export default function AdminPage() {
                   <td className="py-3 px-4 font-medium">{user.name}</td>
                   <td className="py-3 px-4 text-sm text-gray-400">{user.department}</td>
                   <td className="py-3 px-4 text-sm text-gray-400">{formatDate(user.created_at)}</td>
+                  <td className="py-3 px-4 text-center">
+                    <span className="px-2 py-1 bg-amber-500/20 text-amber-400 rounded text-xs font-medium">{user.dotori_point}</span>
+                  </td>
                   <td className="py-3 px-4 text-center">
                     <span className="px-2 py-1 bg-blue-500/20 text-blue-400 rounded text-xs">{user.schedule_count}</span>
                   </td>
@@ -1286,11 +1425,12 @@ export default function AdminPage() {
   )
 }
 
-function StatCard({ icon: Icon, label, value, color }: {
+function StatCard({ icon: Icon, label, value, color, onClick }: {
   icon: typeof Users
   label: string
   value: number
   color: string
+  onClick?: () => void
 }) {
   const colors: Record<string, string> = {
     blue: 'bg-blue-500/20 text-blue-400',
@@ -1304,12 +1444,16 @@ function StatCard({ icon: Icon, label, value, color }: {
   }
 
   return (
-    <div className="bg-gray-800 rounded-xl p-4">
+    <div
+      className={`bg-gray-800 rounded-xl p-4 ${onClick ? 'cursor-pointer hover:bg-gray-700/80 transition-colors' : ''}`}
+      onClick={onClick}
+    >
       <div className={`w-10 h-10 rounded-lg ${colors[color]} flex items-center justify-center mb-3`}>
         <Icon className="w-5 h-5" />
       </div>
       <p className="text-2xl font-bold">{value.toLocaleString()}</p>
       <p className="text-sm text-gray-400">{label}</p>
+      {onClick && <p className="text-xs text-primary mt-1">클릭하여 상세 보기</p>}
     </div>
   )
 }

@@ -982,6 +982,11 @@ export const adminAPI = {
     })
   },
 
+  // 통계 상세 정보 조회
+  getStatsDetail: async (category: string) => {
+    return fetchAdminAPI(`/admin/stats/detail/${category}`)
+  },
+
   // 메인 배너 조회
   getMainBanner: async () => {
     return fetchAdminAPI('/banner/main')

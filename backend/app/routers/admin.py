@@ -141,9 +141,136 @@ async def get_all_users(
             "schedule_count": schedule_count,
             "chat_count": chat_count,
             "friend_count": friend_count,
+            "dotori_point": user.dotori_point or 0,
         })
 
     return result
+
+
+@router.get("/stats/detail/{category}")
+async def get_stats_detail(
+    category: str,
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_admin_token)
+):
+    """통계 상세 정보 - 카테고리별 데이터 조회"""
+    if category == "users":
+        # 최근 가입 유저 20명
+        users = db.query(User).order_by(User.created_at.desc()).limit(20).all()
+        return {
+            "title": "최근 가입 유저",
+            "items": [{
+                "name": u.name,
+                "student_id": u.student_id,
+                "department": u.department,
+                "created_at": u.created_at.isoformat() if u.created_at else None,
+            } for u in users]
+        }
+
+    elif category == "schedules":
+        # 시간표 등록 통계 (학과별)
+        from sqlalchemy import func as sqlfunc
+        stats = db.query(
+            User.department,
+            sqlfunc.count(Schedule.id).label('count')
+        ).join(Schedule, Schedule.user_id == User.id).group_by(User.department).order_by(sqlfunc.count(Schedule.id).desc()).limit(20).all()
+        return {
+            "title": "학과별 시간표 등록",
+            "items": [{"department": s[0], "count": s[1]} for s in stats]
+        }
+
+    elif category == "chat_messages":
+        # 최근 채팅 메시지 30개
+        messages = db.query(ChatMessage, User, ChatRoom).join(
+            User, ChatMessage.user_id == User.id
+        ).join(
+            ChatRoom, ChatMessage.room_id == ChatRoom.id
+        ).order_by(ChatMessage.created_at.desc()).limit(30).all()
+        return {
+            "title": "최근 채팅 메시지",
+            "items": [{
+                "user_name": m[1].name,
+                "room_name": m[2].name,
+                "message": m[0].message[:50] + "..." if len(m[0].message) > 50 else m[0].message,
+                "created_at": m[0].created_at.isoformat() if m[0].created_at else None,
+            } for m in messages]
+        }
+
+    elif category == "random_messages":
+        # 최근 랜덤 채팅 메시지 30개
+        messages = db.query(RandomChatMessage, User).join(
+            User, RandomChatMessage.user_id == User.id
+        ).order_by(RandomChatMessage.created_at.desc()).limit(30).all()
+        return {
+            "title": "최근 랜덤 채팅 메시지",
+            "items": [{
+                "user_name": m[1].name,
+                "room_id": m[0].room_id,
+                "message": m[0].message[:50] + "..." if len(m[0].message) > 50 else m[0].message,
+                "created_at": m[0].created_at.isoformat() if m[0].created_at else None,
+            } for m in messages]
+        }
+
+    elif category == "friends":
+        # 최근 친구 관계 20개
+        friends = db.query(Friend).filter(Friend.status == "accepted").order_by(Friend.created_at.desc()).limit(20).all()
+        items = []
+        for f in friends:
+            user1 = db.query(User).filter(User.id == f.user_id).first()
+            user2 = db.query(User).filter(User.id == f.friend_id).first()
+            items.append({
+                "user1_name": user1.name if user1 else "Unknown",
+                "user2_name": user2.name if user2 else "Unknown",
+                "created_at": f.created_at.isoformat() if f.created_at else None,
+            })
+        return {"title": "최근 친구 관계", "items": items}
+
+    elif category == "clubs":
+        # 동아리 목록
+        clubs = db.query(Club, User).join(User, Club.user_id == User.id).order_by(Club.created_at.desc()).all()
+        return {
+            "title": "동아리 목록",
+            "items": [{
+                "name": c[0].name,
+                "description": c[0].description[:30] + "..." if len(c[0].description) > 30 else c[0].description,
+                "creator": c[1].name,
+                "created_at": c[0].created_at.isoformat() if c[0].created_at else None,
+            } for c in clubs]
+        }
+
+    elif category == "meetings":
+        # 과팅 목록
+        meetings = db.query(Meeting, User).join(User, Meeting.user_id == User.id).order_by(Meeting.created_at.desc()).all()
+        return {
+            "title": "과팅 목록",
+            "items": [{
+                "department": m[0].department,
+                "member_count": m[0].member_count,
+                "status": m[0].status,
+                "creator": m[1].name,
+                "created_at": m[0].created_at.isoformat() if m[0].created_at else None,
+            } for m in meetings]
+        }
+
+    elif category == "reports":
+        # 신고 목록
+        reports = db.query(UserReport).order_by(UserReport.created_at.desc()).all()
+        items = []
+        for r in reports:
+            reporter = db.query(User).filter(User.id == r.reporter_id).first()
+            reported = db.query(User).filter(User.id == r.reported_user_id).first()
+            items.append({
+                "reporter": reporter.name if reporter else "Unknown",
+                "reported": reported.name if reported else "Unknown",
+                "reason": r.reason,
+                "detail": r.detail[:30] + "..." if r.detail and len(r.detail) > 30 else r.detail,
+                "status": r.status,
+                "created_at": r.created_at.isoformat() if r.created_at else None,
+            })
+        return {"title": "신고 목록", "items": items}
+
+    else:
+        raise HTTPException(status_code=400, detail="잘못된 카테고리입니다.")
 
 
 @router.get("/users/{user_id}")
