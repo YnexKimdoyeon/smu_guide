@@ -815,6 +815,106 @@ def cleanup_quick_rooms():
 # 매일 자정에 급하게 매칭 방 정리
 scheduler.add_job(cleanup_quick_rooms, 'cron', hour=0, minute=0)
 
+
+def seed_demo_commute_group():
+    """앱스토어 심사용 데모 등하교 매칭 그룹 생성 (매일 자동)"""
+    from app.models.commute import CommuteChat
+
+    db = SessionLocal()
+    try:
+        today = date.today()
+        today_weekday = WEEKDAY_MAP[today.weekday()]
+
+        # 김도연 계정 찾기
+        main_user = db.query(User).filter(User.name == "김도연").first()
+        if not main_user:
+            print("[Demo] 김도연 계정을 찾을 수 없습니다")
+            return
+
+        # 이미 오늘 데모 그룹이 있으면 스킵
+        existing = db.query(CommuteGroup).join(
+            CommuteGroupMember, CommuteGroup.id == CommuteGroupMember.group_id
+        ).filter(
+            CommuteGroupMember.user_id == main_user.id,
+            CommuteGroup.match_date == today,
+            CommuteGroup.location == "탕정역"
+        ).first()
+        if existing:
+            print("[Demo] 오늘 데모 그룹이 이미 존재합니다")
+            return
+
+        # 데모 사용자 생성 (없으면)
+        demo_users_info = [
+            {"student_id": "DEMO_001", "name": "이서연", "department": "컴퓨터공학과"},
+            {"student_id": "DEMO_002", "name": "박지호", "department": "간호학과"},
+        ]
+        demo_users = []
+        for info in demo_users_info:
+            u = db.query(User).filter(User.student_id == info["student_id"]).first()
+            if not u:
+                u = User(
+                    student_id=info["student_id"],
+                    password="demo_no_login",
+                    name=info["name"],
+                    department=info["department"],
+                )
+                db.add(u)
+                db.commit()
+                db.refresh(u)
+            demo_users.append(u)
+
+        # 데모 매칭 그룹 생성
+        group = CommuteGroup(
+            match_date=today,
+            day=today_weekday,
+            commute_type="등교",
+            location="탕정역",
+            time_slot="08:30",
+        )
+        db.add(group)
+        db.commit()
+        db.refresh(group)
+
+        # 멤버 추가 (김도연 + 데모 사용자 2명)
+        all_members = [main_user] + demo_users
+        for u in all_members:
+            db.add(CommuteGroupMember(
+                group_id=group.id,
+                user_id=u.id,
+                is_confirmed=1,
+            ))
+
+        # 환영 채팅 메시지
+        db.add(CommuteChat(
+            group_id=group.id,
+            user_id=demo_users[0].id,
+            message="안녕하세요! 오늘 같이 등교해요~",
+        ))
+        db.add(CommuteChat(
+            group_id=group.id,
+            user_id=demo_users[1].id,
+            message="반갑습니다! 탕정역에서 만나요!",
+        ))
+        db.add(CommuteChat(
+            group_id=group.id,
+            user_id=main_user.id,
+            message="네 좋아요! 8시 30분에 봐요",
+        ))
+
+        db.commit()
+        print(f"[Demo] 데모 등하교 그룹 생성 완료 (group_id={group.id})")
+
+    except Exception as e:
+        print(f"[Demo] 데모 그룹 생성 오류: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
+# 자정 이후 데모 데이터 재생성 (0시 1분)
+scheduler.add_job(seed_demo_commute_group, 'cron', hour=0, minute=1)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 시작 시 스케줄러 시작
@@ -824,6 +924,9 @@ async def lifespan(app: FastAPI):
     from app.services.crawler import run_crawler
     import asyncio
     asyncio.create_task(run_crawler())
+
+    # 데모 등하교 그룹 시드
+    seed_demo_commute_group()
 
     yield
 
