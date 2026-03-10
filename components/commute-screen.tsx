@@ -1229,7 +1229,7 @@ export function CommuteScreen({ onBack }: CommuteScreenProps) {
               </div>
             ) : (
               <div className="flex flex-col gap-3">
-                {quickRooms.map((room) => (
+                {quickRooms.filter(room => !blockedUserIds.includes(room.creator_id)).map((room) => (
                   <button
                     key={room.id}
                     onClick={() => handleJoinQuickRoom(room)}

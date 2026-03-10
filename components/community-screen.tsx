@@ -776,7 +776,7 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {clubs.map(club => (
+                  {clubs.filter(club => !blockedUserIds.includes(club.user_id)).map(club => (
                     <div
                       key={club.id}
                       className="bg-card rounded-xl p-4 border border-border/50"
@@ -848,7 +848,7 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
                   </button>
                 </div>
 
-                {(showMyMeetings ? myMeetings.filter(m => m.status === 'matched') : meetings).length === 0 ? (
+                {(showMyMeetings ? myMeetings.filter(m => m.status === 'matched') : meetings.filter(m => !blockedUserIds.includes(m.user_id))).length === 0 ? (
                   <div className="text-center py-20">
                     <Heart className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                     <p className="text-muted-foreground">
@@ -857,7 +857,7 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {(showMyMeetings ? myMeetings.filter(m => m.status === 'matched') : meetings).map(meeting => (
+                    {(showMyMeetings ? myMeetings.filter(m => m.status === 'matched') : meetings.filter(m => !blockedUserIds.includes(m.user_id))).map(meeting => (
                       <div
                         key={meeting.id}
                         className={`bg-card rounded-xl p-4 border ${
