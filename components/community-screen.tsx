@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { ArrowLeft, Plus, Users, Heart, Edit2, Trash2, ChevronRight, UserPlus, Check, X, MessageCircle, Send, LogOut } from 'lucide-react'
-import { clubAPI, meetingAPI, chatAPI } from '@/lib/api'
+import { ArrowLeft, Plus, Users, Heart, Edit2, Trash2, ChevronRight, UserPlus, Check, X, MessageCircle, Send, LogOut, Ban, Flag, AlertTriangle, MoreVertical } from 'lucide-react'
+import { clubAPI, meetingAPI, chatAPI, blockAPI } from '@/lib/api'
 import { useAlert } from './alert-context'
 
 interface CommunityScreenProps {
@@ -22,7 +22,23 @@ interface ChatMessage {
   message: string
   created_at: string
   is_mine?: boolean
+  sender_name?: string
 }
+
+interface UserAction {
+  userId: number
+  userName: string
+  contentType?: 'club' | 'meeting' | 'chat'
+  contentId?: number
+}
+
+const REPORT_REASONS = [
+  { value: 'spam', label: '스팸/광고' },
+  { value: 'abuse', label: '욕설/비방' },
+  { value: 'harassment', label: '성희롱/괴롭힘' },
+  { value: 'inappropriate', label: '부적절한 내용' },
+  { value: 'other', label: '기타' },
+]
 
 interface Club {
   id: number
@@ -99,6 +115,14 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
   const chatEndRef = useRef<HTMLDivElement>(null)
   const chatPollingRef = useRef<NodeJS.Timeout | null>(null)
 
+  // 차단/신고 모달 상태
+  const [actionModal, setActionModal] = useState<UserAction | null>(null)
+  const [showReportModal, setShowReportModal] = useState(false)
+  const [reportReason, setReportReason] = useState('')
+  const [reportDetail, setReportDetail] = useState('')
+  const [isProcessing, setIsProcessing] = useState(false)
+  const [blockedUserIds, setBlockedUserIds] = useState<number[]>([])
+
   // 폼 상태
   const [clubForm, setClubForm] = useState({ name: '', description: '', qna_questions: [''] })
   const [meetingForm, setMeetingForm] = useState({ department: userDepartment, member_count: 2, description: '' })
@@ -116,6 +140,71 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
   useEffect(() => {
     loadData()
   }, [activeTab])
+
+  // 차단 목록 로드
+  useEffect(() => {
+    const loadBlockedUsers = async () => {
+      try {
+        const data = await blockAPI.getBlockedIds()
+        setBlockedUserIds(data.blocked_ids || [])
+      } catch (error) {
+        console.error('차단 목록 로딩 실패:', error)
+      }
+    }
+    loadBlockedUsers()
+  }, [])
+
+  const handleUserAction = (userId: number, userName: string, contentType?: 'club' | 'meeting' | 'chat', contentId?: number) => {
+    setActionModal({ userId, userName, contentType, contentId })
+  }
+
+  const handleBlock = async () => {
+    if (!actionModal || isProcessing) return
+    setIsProcessing(true)
+    try {
+      await blockAPI.blockUser(actionModal.userId)
+      setBlockedUserIds(prev => [...prev, actionModal.userId])
+      setChatMessages(prev => prev.filter(m => m.user_id !== actionModal.userId))
+      showToast('차단되었습니다.', 'success')
+      closeModals()
+    } catch (error: any) {
+      showToast(error.message || '차단에 실패했습니다.', 'error')
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  const handleOpenReport = () => {
+    setReportReason('')
+    setReportDetail('')
+    setShowReportModal(true)
+  }
+
+  const handleReport = async () => {
+    if (!actionModal || !reportReason || isProcessing) return
+    setIsProcessing(true)
+    try {
+      await blockAPI.reportUser({
+        reported_user_id: actionModal.userId,
+        reason: reportReason,
+        detail: reportDetail || undefined,
+        room_type: actionModal.contentType || 'community',
+      })
+      showToast('신고가 접수되었습니다.', 'success')
+      closeModals()
+    } catch (error: any) {
+      showToast(error.message || '신고에 실패했습니다.', 'error')
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  const closeModals = () => {
+    setActionModal(null)
+    setShowReportModal(false)
+    setReportReason('')
+    setReportDetail('')
+  }
 
   const loadData = async () => {
     setIsLoading(true)
@@ -502,6 +591,114 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
     }))
   }
 
+  // 차단/신고 모달 렌더링
+  const renderModals = () => (
+    <>
+      {actionModal && !showReportModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-end justify-center z-50" onClick={closeModals}>
+          <div
+            className="bg-card rounded-t-2xl w-full max-w-lg p-4 pb-8 animate-in slide-in-from-bottom duration-300"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="w-10 h-1 bg-muted-foreground/30 rounded-full mx-auto mb-4" />
+            <p className="text-center text-sm text-muted-foreground mb-4">{actionModal.userName}</p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={handleBlock}
+                disabled={isProcessing}
+                className="flex items-center gap-3 w-full p-4 rounded-xl bg-secondary hover:bg-muted transition-colors"
+              >
+                <Ban className="w-5 h-5 text-orange-500" />
+                <div className="text-left">
+                  <p className="text-sm font-medium text-foreground">차단하기</p>
+                  <p className="text-xs text-muted-foreground">이 사용자의 콘텐츠를 더 이상 보지 않습니다</p>
+                </div>
+              </button>
+              <button
+                onClick={handleOpenReport}
+                disabled={isProcessing}
+                className="flex items-center gap-3 w-full p-4 rounded-xl bg-secondary hover:bg-muted transition-colors"
+              >
+                <Flag className="w-5 h-5 text-red-500" />
+                <div className="text-left">
+                  <p className="text-sm font-medium text-foreground">신고하기</p>
+                  <p className="text-xs text-muted-foreground">부적절한 행위를 신고합니다</p>
+                </div>
+              </button>
+            </div>
+            <button
+              onClick={closeModals}
+              className="w-full mt-4 py-3 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              취소
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showReportModal && actionModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={closeModals}>
+          <div
+            className="bg-card rounded-2xl w-full max-w-sm p-5 animate-in zoom-in-95 duration-200"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 text-red-500" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-foreground">신고하기</h3>
+                <p className="text-xs text-muted-foreground">{actionModal.userName}</p>
+              </div>
+            </div>
+            <div className="mb-4">
+              <p className="text-xs font-medium text-muted-foreground mb-2">신고 사유</p>
+              <div className="flex flex-wrap gap-2">
+                {REPORT_REASONS.map(reason => (
+                  <button
+                    key={reason.value}
+                    onClick={() => setReportReason(reason.value)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
+                      reportReason === reason.value
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-secondary text-foreground hover:bg-muted'
+                    }`}
+                  >
+                    {reason.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="mb-4">
+              <p className="text-xs font-medium text-muted-foreground mb-2">상세 내용 (선택)</p>
+              <textarea
+                value={reportDetail}
+                onChange={e => setReportDetail(e.target.value)}
+                placeholder="추가적인 내용을 입력해주세요"
+                className="w-full h-20 px-3 py-2 rounded-xl bg-secondary border border-border/50 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-2 focus:ring-primary/50"
+              />
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowReportModal(false)}
+                className="flex-1 py-2.5 rounded-xl bg-secondary text-foreground font-medium hover:bg-muted transition-colors"
+              >
+                뒤로
+              </button>
+              <button
+                onClick={handleReport}
+                disabled={!reportReason || isProcessing}
+                className="flex-1 py-2.5 rounded-xl bg-red-500 text-white font-medium hover:bg-red-600 transition-colors disabled:opacity-50"
+              >
+                {isProcessing ? '처리중...' : '신고하기'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+
   return (
     <div className="fixed inset-0 bg-background flex flex-col z-50">
       {/* 헤더 */}
@@ -593,7 +790,15 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
                             <span className="text-xs text-primary">신청 {club.application_count}명</span>
                           </div>
                         </div>
-                        <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                        {!club.is_mine && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleUserAction(club.user_id, club.author_name, 'club', club.id) }}
+                            className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-muted transition-colors flex-shrink-0"
+                          >
+                            <MoreVertical className="w-4 h-4 text-muted-foreground" />
+                          </button>
+                        )}
+                        {club.is_mine && <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0" />}
                       </div>
                       {club.is_mine && (
                         <div className="flex gap-2 mt-3 pt-3 border-t border-border/50">
@@ -680,7 +885,16 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
                               <span className="text-xs text-pink-500">신청 {meeting.application_count}명</span>
                             </div>
                           </div>
-                          <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                          {!meeting.is_mine ? (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); handleUserAction(meeting.user_id, meeting.department, 'meeting', meeting.id) }}
+                              className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-muted transition-colors flex-shrink-0"
+                            >
+                              <MoreVertical className="w-4 h-4 text-muted-foreground" />
+                            </button>
+                          ) : (
+                            <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                          )}
                         </div>
                         {/* 매칭 완료된 경우 채팅방 버튼 */}
                         {meeting.status === 'matched' && meeting.chat_room_id && (
@@ -760,6 +974,15 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
                 이미 신청하셨습니다
               </div>
             )}
+            {!selectedClub.is_mine && (
+              <button
+                onClick={() => handleUserAction(selectedClub.user_id, selectedClub.author_name, 'club', selectedClub.id)}
+                className="w-full py-3 bg-secondary text-muted-foreground font-medium rounded-xl flex items-center justify-center gap-2 hover:bg-muted transition-colors"
+              >
+                <Flag className="w-4 h-4" />
+                신고/차단
+              </button>
+            )}
           </div>
         )}
 
@@ -797,6 +1020,15 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
               <div className="text-center py-3 bg-muted rounded-xl text-muted-foreground">
                 이미 신청하셨습니다
               </div>
+            )}
+            {!selectedMeeting.is_mine && (
+              <button
+                onClick={() => handleUserAction(selectedMeeting.user_id, selectedMeeting.department, 'meeting', selectedMeeting.id)}
+                className="w-full py-3 bg-secondary text-muted-foreground font-medium rounded-xl flex items-center justify-center gap-2 hover:bg-muted transition-colors"
+              >
+                <Flag className="w-4 h-4" />
+                신고/차단
+              </button>
             )}
           </div>
         )}
@@ -1204,7 +1436,9 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
                   <p className="text-sm text-muted-foreground mt-1">첫 메시지를 보내보세요!</p>
                 </div>
               ) : (
-                chatMessages.map((msg) => (
+                chatMessages
+                  .filter(msg => !blockedUserIds.includes(msg.user_id))
+                  .map((msg) => (
                   <div
                     key={msg.id}
                     className={`flex ${msg.is_mine ? 'justify-end' : 'justify-start'}`}
@@ -1215,6 +1449,7 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
                           ? 'bg-green-500 text-white rounded-br-md'
                           : 'bg-card border border-border/50 text-foreground rounded-bl-md'
                       }`}
+                      onClick={() => !msg.is_mine && handleUserAction(msg.user_id, msg.sender_name || '사용자', 'chat', msg.id)}
                     >
                       <p className="text-sm whitespace-pre-wrap break-words">{msg.message}</p>
                       <p className={`text-xs mt-1 ${msg.is_mine ? 'text-green-100' : 'text-muted-foreground'}`}>
@@ -1269,6 +1504,8 @@ export function CommunityScreen({ onBack, userDepartment, userName, userStudentI
           <Plus className="w-6 h-6 text-white" />
         </button>
       )}
+
+      {renderModals()}
     </div>
   )
 }

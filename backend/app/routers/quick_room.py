@@ -146,7 +146,7 @@ def join_room(
     system_msg = QuickRoomChat(
         room_id=room_id,
         user_id=current_user.id,
-        message=f"{current_user.name}님이 입장했습니다 🎉",
+        message=f"{current_user.name}님이 입장했습니다",
         is_system=1,
     )
     db.add(system_msg)
