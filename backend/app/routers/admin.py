@@ -92,25 +92,32 @@ async def get_stats(
     db: Session = Depends(get_db),
     _: bool = Depends(verify_admin_token)
 ):
-    """전체 통계"""
-    total_users = db.query(func.count(User.id)).scalar()
-    total_schedules = db.query(func.count(Schedule.id)).scalar()
-    total_chat_messages = db.query(func.count(ChatMessage.id)).scalar()
-    total_random_messages = db.query(func.count(RandomChatMessage.id)).scalar()
-    total_friends = db.query(func.count(Friend.id)).filter(Friend.status == "accepted").scalar()
-    total_clubs = db.query(func.count(Club.id)).scalar()
-    total_meetings = db.query(func.count(Meeting.id)).scalar()
-    total_reports = db.query(func.count(UserReport.id)).scalar()
+    """전체 통계 (단일 쿼리)"""
+    from sqlalchemy import select, literal_column
+
+    # 각 테이블 COUNT를 하나의 쿼리로
+    result = db.execute(
+        select(
+            select(func.count(User.id)).scalar_subquery().label('users'),
+            select(func.count(Schedule.id)).scalar_subquery().label('schedules'),
+            select(func.count(ChatMessage.id)).scalar_subquery().label('chats'),
+            select(func.count(RandomChatMessage.id)).scalar_subquery().label('randoms'),
+            select(func.count(Friend.id)).where(Friend.status == "accepted").scalar_subquery().label('friends'),
+            select(func.count(Club.id)).scalar_subquery().label('clubs'),
+            select(func.count(Meeting.id)).scalar_subquery().label('meetings'),
+            select(func.count(UserReport.id)).scalar_subquery().label('reports'),
+        )
+    ).first()
 
     return {
-        "total_users": total_users,
-        "total_schedules": total_schedules,
-        "total_chat_messages": total_chat_messages,
-        "total_random_messages": total_random_messages,
-        "total_friends": total_friends,
-        "total_clubs": total_clubs,
-        "total_meetings": total_meetings,
-        "total_reports": total_reports,
+        "total_users": result[0],
+        "total_schedules": result[1],
+        "total_chat_messages": result[2],
+        "total_random_messages": result[3],
+        "total_friends": result[4],
+        "total_clubs": result[5],
+        "total_meetings": result[6],
+        "total_reports": result[7],
     }
 
 
@@ -119,32 +126,57 @@ async def get_all_users(
     db: Session = Depends(get_db),
     _: bool = Depends(verify_admin_token)
 ):
-    """전체 유저 목록"""
-    users = db.query(User).order_by(User.created_at.desc()).all()
+    """전체 유저 목록 (단일 쿼리로 통계 조회)"""
+    from sqlalchemy import case
+    from sqlalchemy.orm import aliased
 
-    result = []
-    for user in users:
-        # 각 유저의 기본 통계
-        schedule_count = db.query(func.count(Schedule.id)).filter(Schedule.user_id == user.id).scalar()
-        chat_count = db.query(func.count(ChatMessage.id)).filter(ChatMessage.user_id == user.id).scalar()
-        friend_count = db.query(func.count(Friend.id)).filter(
-            ((Friend.user_id == user.id) | (Friend.friend_id == user.id)) &
-            (Friend.status == "accepted")
-        ).scalar()
+    # 서브쿼리로 통계를 한 번에 가져오기
+    schedule_sub = db.query(
+        Schedule.user_id,
+        func.count(Schedule.id).label('cnt')
+    ).group_by(Schedule.user_id).subquery()
 
-        result.append({
-            "id": user.id,
-            "student_id": user.student_id,
-            "name": user.name,
-            "department": user.department,
-            "created_at": user.created_at.isoformat() if user.created_at else None,
-            "schedule_count": schedule_count,
-            "chat_count": chat_count,
-            "friend_count": friend_count,
-            "dotori_point": user.dotori_point or 0,
-        })
+    chat_sub = db.query(
+        ChatMessage.user_id,
+        func.count(ChatMessage.id).label('cnt')
+    ).group_by(ChatMessage.user_id).subquery()
 
-    return result
+    friend_sub = db.query(
+        Friend.user_id,
+        func.count(Friend.id).label('cnt')
+    ).filter(Friend.status == "accepted").group_by(Friend.user_id).subquery()
+
+    friend_sub2 = db.query(
+        Friend.friend_id.label('user_id'),
+        func.count(Friend.id).label('cnt')
+    ).filter(Friend.status == "accepted").group_by(Friend.friend_id).subquery()
+
+    rows = db.query(
+        User,
+        func.coalesce(schedule_sub.c.cnt, 0).label('schedule_count'),
+        func.coalesce(chat_sub.c.cnt, 0).label('chat_count'),
+        (func.coalesce(friend_sub.c.cnt, 0) + func.coalesce(friend_sub2.c.cnt, 0)).label('friend_count'),
+    ).outerjoin(
+        schedule_sub, User.id == schedule_sub.c.user_id
+    ).outerjoin(
+        chat_sub, User.id == chat_sub.c.user_id
+    ).outerjoin(
+        friend_sub, User.id == friend_sub.c.user_id
+    ).outerjoin(
+        friend_sub2, User.id == friend_sub2.c.user_id
+    ).order_by(User.created_at.desc()).all()
+
+    return [{
+        "id": user.id,
+        "student_id": user.student_id,
+        "name": user.name,
+        "department": user.department,
+        "created_at": user.created_at.isoformat() if user.created_at else None,
+        "schedule_count": schedule_count,
+        "chat_count": chat_count,
+        "friend_count": friend_count,
+        "dotori_point": user.dotori_point or 0,
+    } for user, schedule_count, chat_count, friend_count in rows]
 
 
 @router.get("/stats/detail/{category}")
