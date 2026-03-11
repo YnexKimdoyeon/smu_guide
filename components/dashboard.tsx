@@ -38,7 +38,7 @@ interface DashboardProps {
 }
 
 // 앱스토어 심사용: 숨길 앱 ID 목록 (심사 통과 후 빈 배열로 변경)
-const hiddenApps: AppId[] = ['chat']
+const hiddenApps: AppId[] = []
 
 const apps: { id: AppId; label: string; icon: typeof Calendar; color: string; bgColor: string }[] = [
   { id: 'timetable', label: '내 시간표', icon: Calendar, color: '#3B82F6', bgColor: '#DBEAFE' },
