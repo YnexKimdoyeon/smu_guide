@@ -519,10 +519,13 @@ async def login_with_sunmoon(
             try:
                 ears_session = await login_ears_with_sws_client(client, login_data.student_id)
                 ears_session_cache[user.id] = ears_session
-                save_credentials('ears', user.id, {
+                save_data = {
                     'student_id': login_data.student_id,
                     'password': login_data.password
-                })
+                }
+                if ears_session.get('sso_data'):
+                    save_data.update(ears_session['sso_data'])
+                save_credentials('ears', user.id, save_data)
                 print(f"[EARS] 세션 자동 초기화 성공: user_id={user.id}")
             except Exception as e:
                 print(f"[EARS] 세션 자동 초기화 실패: {str(e)}")

@@ -143,69 +143,107 @@ async def _ears_sso_and_login(sso_id: str, sso_pw: str, sso_type: str, student_i
         }
 
 
+async def _extract_sso_from_menu(menu_html: str, student_id: str):
+    """MenuAuthCheck HTML에서 SSO 폼 데이터 추출"""
+    id_match = re.search(r"name=[\"']id[\"'][^/]*value=[\"']([^\"']+)[\"']", menu_html)
+    pw_match = re.search(r"name=[\"']pw[\"'][^/]*value=[\"']([^\"']+)[\"']", menu_html)
+    type_match = re.search(r"name=[\"']type[\"'][^/]*value=[\"']([^\"']+)[\"']", menu_html)
+
+    if not pw_match:
+        print(f"[EARS] MenuAuthCheck 응답에서 pw 못 찾음. 앞부분: {menu_html[:300]}")
+        return None
+
+    return {
+        'sso_id': id_match.group(1) if id_match else student_id,
+        'sso_pw': pw_match.group(1),
+        'sso_type': type_match.group(1) if type_match else "3",
+    }
+
+
 async def login_ears_with_sws_client(sws_client: httpx.AsyncClient, student_id: str) -> dict:
     """이미 인증된 SWS client로 EARS 로그인 (sunmoon.py 로그인 플로우에서 호출)"""
-    from app.routers.sunmoon import SWS_MAIN_URL, get_headers
-
     menu_resp = await sws_client.get(
         SWS_MENU_AUTH_URL,
         params={"menu": "출결현황 일반 교과목"},
-        headers=get_headers(SWS_MAIN_URL)
+        headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
     )
 
     print(f"[EARS] MenuAuthCheck status={menu_resp.status_code}, len={len(menu_resp.text)}")
-
-    id_match = re.search(r'name=["\']id["\']\s+value=["\']([^"\']+)["\']', menu_resp.text)
-    pw_match = re.search(r'name=["\']pw["\']\s+value=["\']([^"\']+)["\']', menu_resp.text)
-    type_match = re.search(r'name=["\']type["\']\s+value=["\']([^"\']+)["\']', menu_resp.text)
-
-    if not pw_match:
-        print(f"[EARS] MenuAuthCheck 응답에서 pw 못 찾음. 응답 앞부분: {menu_resp.text[:300]}")
+    sso = await _extract_sso_from_menu(menu_resp.text, student_id)
+    if not sso:
         raise HTTPException(status_code=401, detail="EARS SSO 자격 증명을 가져올 수 없습니다")
 
-    sso_id = id_match.group(1) if id_match else student_id
-    sso_pw = pw_match.group(1)
-    sso_type = type_match.group(1) if type_match else "3"
-
-    return await _ears_sso_and_login(sso_id, sso_pw, sso_type, student_id)
+    result = await _ears_sso_and_login(sso['sso_id'], sso['sso_pw'], sso['sso_type'], student_id)
+    # SSO 데이터 저장 (세션 복원 시 MenuAuthCheck 없이 사용)
+    result['sso_data'] = sso
+    return result
 
 
 async def login_ears(student_id: str, password: str) -> dict:
-    """독립적 EARS 로그인 (SWS 로그인부터 수행, ensure_ears_session용)"""
-    async with httpx.AsyncClient(follow_redirects=True, verify=False, timeout=30.0) as client:
-        from app.routers.sunmoon import SWS_LOGIN_URL, SWS_MAIN_URL, get_headers
+    """독립적 EARS 로그인 (SWS 로그인부터 수행) - curl과 동일한 최소 헤더"""
+    SWS_BASE = "https://sws.sunmoon.ac.kr"
+    ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36'
 
-        # SWS 로그인
-        login_page = await client.get(SWS_LOGIN_URL, headers=get_headers())
+    async with httpx.AsyncClient(follow_redirects=False, verify=False, timeout=30.0) as client:
+        # 1. GET Login.aspx (쿠키 + viewstate)
+        login_page = await client.get(f"{SWS_BASE}/Login.aspx", headers={'User-Agent': ua})
 
         viewstate = ""
         vs_match = re.search(r'id="__VIEWSTATE"\s+value="([^"]*)"', login_page.text)
         if vs_match:
             viewstate = vs_match.group(1)
-        viewstate_gen = ""
+        viewstate_gen = "C2EE9ABB"
         gen_match = re.search(r'id="__VIEWSTATEGENERATOR"\s+value="([^"]*)"', login_page.text)
         if gen_match:
             viewstate_gen = gen_match.group(1)
 
-        login_form = {
-            "__EVENTTARGET": "btnLogin",
-            "__EVENTARGUMENT": "",
-            "__VIEWSTATE": viewstate,
-            "__VIEWSTATEGENERATOR": viewstate_gen,
-            "__SCROLLPOSITIONX": "0",
-            "__SCROLLPOSITIONY": "0",
-            "txtID": student_id,
-            "txtPasswd": password
-        }
-        login_resp = await client.post(SWS_LOGIN_URL, data=login_form, headers=get_headers(SWS_LOGIN_URL))
-        print(f"[EARS] standalone SWS 로그인: url={login_resp.url}, status={login_resp.status_code}")
+        # 2. POST Login.aspx
+        login_resp = await client.post(
+            f"{SWS_BASE}/Login.aspx",
+            data={
+                "__EVENTTARGET": "btnLogin",
+                "__EVENTARGUMENT": "",
+                "__VIEWSTATE": viewstate,
+                "__VIEWSTATEGENERATOR": viewstate_gen,
+                "__SCROLLPOSITIONX": "0",
+                "__SCROLLPOSITIONY": "0",
+                "txtID": student_id,
+                "txtPasswd": password
+            },
+            headers={
+                'User-Agent': ua,
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Origin': SWS_BASE,
+                'Referer': f'{SWS_BASE}/Login.aspx',
+            }
+        )
+        print(f"[EARS] SWS 로그인: status={login_resp.status_code}")
 
-        # 세션 쿠키 확인
+        # 3. GET MainQ.aspx (세션 확립)
+        if login_resp.status_code == 302:
+            await client.get(f"{SWS_BASE}/MainQ.aspx", headers={
+                'User-Agent': ua,
+                'Referer': f'{SWS_BASE}/Login.aspx',
+            })
+
         cookie_names = [c.name for c in client.cookies.jar]
         print(f"[EARS] SWS 쿠키: {cookie_names}")
 
-        # MenuAuthCheck 호출
-        return await login_ears_with_sws_client(client, student_id)
+        # 4. MenuAuthCheck
+        menu_resp = await client.get(
+            SWS_MENU_AUTH_URL,
+            params={"menu": "출결현황 일반 교과목"},
+            headers={'User-Agent': ua}
+        )
+        print(f"[EARS] MenuAuthCheck status={menu_resp.status_code}, len={len(menu_resp.text)}")
+
+        sso = await _extract_sso_from_menu(menu_resp.text, student_id)
+        if not sso:
+            raise HTTPException(status_code=401, detail="EARS SSO 자격 증명을 가져올 수 없습니다")
+
+        result = await _ears_sso_and_login(sso['sso_id'], sso['sso_pw'], sso['sso_type'], student_id)
+        result['sso_data'] = sso
+        return result
 
 
 async def ensure_ears_session(user_id: int) -> dict:
@@ -213,27 +251,42 @@ async def ensure_ears_session(user_id: int) -> dict:
     if user_id in ears_session_cache:
         return ears_session_cache[user_id]
 
-    # 저장된 자격 증명으로 복원 시도 (ears → canvas 폴백)
+    # 1. 저장된 SSO 데이터로 빠른 복원 (MenuAuthCheck 불필요)
     creds = load_credentials('ears', user_id)
+    if creds and creds.get('sso_id') and creds.get('sso_pw'):
+        try:
+            print(f"[EARS] SSO 데이터로 빠른 복원: user_id={user_id}")
+            session_data = await _ears_sso_and_login(
+                creds['sso_id'], creds['sso_pw'], creds.get('sso_type', '3'),
+                creds.get('student_id', '')
+            )
+            ears_session_cache[user_id] = session_data
+            return session_data
+        except Exception as e:
+            print(f"[EARS] SSO 빠른 복원 실패: {e}")
+
+    # 2. SWS 자격증명으로 전체 로그인 (ears → canvas 폴백)
     if not (creds and creds.get('student_id') and creds.get('password')):
-        # EARS 자격증명이 없으면 canvas 자격증명으로 폴백 (동일 계정)
         canvas_creds = load_credentials('canvas', user_id)
         if canvas_creds and canvas_creds.get('username') and canvas_creds.get('password'):
             creds = {'student_id': canvas_creds['username'], 'password': canvas_creds['password']}
 
     if creds and creds.get('student_id') and creds.get('password'):
         try:
-            print(f"[EARS] 저장된 자격 증명으로 세션 복원: user_id={user_id}")
+            print(f"[EARS] SWS 전체 로그인으로 세션 복원: user_id={user_id}")
             session_data = await login_ears(creds['student_id'], creds['password'])
             ears_session_cache[user_id] = session_data
-            # EARS 자격증명도 저장
-            save_credentials('ears', user_id, {
+            # SSO 데이터 포함하여 저장
+            save_data = {
                 'student_id': creds['student_id'],
                 'password': creds['password']
-            })
+            }
+            if session_data.get('sso_data'):
+                save_data.update(session_data['sso_data'])
+            save_credentials('ears', user_id, save_data)
             return session_data
         except Exception as e:
-            print(f"[EARS] 세션 복원 실패: {e}")
+            print(f"[EARS] 전체 로그인 복원 실패: {e}")
 
     raise HTTPException(status_code=401, detail="EARS 세션이 필요합니다. 다시 로그인하세요.")
 
