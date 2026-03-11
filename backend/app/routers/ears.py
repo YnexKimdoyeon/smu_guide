@@ -100,12 +100,19 @@ async def _ears_sso_and_login(sso_id: str, sso_pw: str, sso_type: str, student_i
             msg = sin_data.get("xidedu", {}).get("xmsg", "Unknown")
             raise HTTPException(status_code=401, detail=f"EARS 로그인 실패: {msg}")
 
-        # 쿠키 추출
+        # 쿠키 추출 (/attend 경로의 JSESSIONID 우선 사용)
         all_cookies = {}
+        attend_jsessionid = None
         for cookie in client.cookies.jar:
             all_cookies[cookie.name] = cookie.value
+            if cookie.name == 'JSESSIONID' and cookie.path == '/attend':
+                attend_jsessionid = cookie.value
 
-        print(f"[EARS] 로그인 성공: student_id={student_id}, 쿠키={list(all_cookies.keys())}")
+        # /attend 경로 JSESSIONID가 출석 API에 필요
+        if attend_jsessionid:
+            all_cookies['JSESSIONID'] = attend_jsessionid
+
+        print(f"[EARS] 로그인 성공: student_id={student_id}, attend_jsessionid={attend_jsessionid is not None}")
 
         # 수강과목 목록 추출
         courses = []
