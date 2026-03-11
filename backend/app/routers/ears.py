@@ -38,72 +38,16 @@ def _parse_attend_kind(kind: str) -> str:
     return mapping.get(kind, kind)
 
 
-async def login_ears(student_id: str, password: str) -> dict:
+async def _ears_sso_and_login(sso_id: str, sso_pw: str, sso_type: str, student_id: str) -> dict:
     """
-    EARS 로그인 (SWS SSO 경유)
-    1. SWS MenuAuthCheck로 암호화된 비밀번호 획득
-    2. EARS SSO에 POST → redirect에서 suser_id, suser_name 획득
-    3. iwin_sin으로 EARS 세션 확보 + 수강과목 목록 획득
+    EARS SSO 인증 + iwin_sin 로그인 (SWS에서 받은 SSO 데이터 사용)
     """
     async with httpx.AsyncClient(follow_redirects=False, verify=False, timeout=30.0) as client:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36'
         }
 
-        # 1. SWS 로그인 (세션 확보)
-        from app.routers.sunmoon import SWS_LOGIN_URL, SWS_MAIN_URL, get_headers
-        login_page = await client.get(SWS_LOGIN_URL, headers=get_headers())
-
-        viewstate = ""
-        vs_match = re.search(r'id="__VIEWSTATE"\s+value="([^"]*)"', login_page.text)
-        if vs_match:
-            viewstate = vs_match.group(1)
-        viewstate_gen = ""
-        gen_match = re.search(r'id="__VIEWSTATEGENERATOR"\s+value="([^"]*)"', login_page.text)
-        if gen_match:
-            viewstate_gen = gen_match.group(1)
-
-        login_form = {
-            "__EVENTTARGET": "btnLogin",
-            "__EVENTARGUMENT": "",
-            "__VIEWSTATE": viewstate,
-            "__VIEWSTATEGENERATOR": viewstate_gen,
-            "__SCROLLPOSITIONX": "0",
-            "__SCROLLPOSITIONY": "0",
-            "txtID": student_id,
-            "txtPasswd": password
-        }
-        login_resp = await client.post(SWS_LOGIN_URL, data=login_form, headers=get_headers(SWS_LOGIN_URL))
-        # SWS 메인 페이지 접근하여 세션 확립
-        await client.get(SWS_MAIN_URL, headers=get_headers(SWS_LOGIN_URL))
-
-        # 2. SWS MenuAuthCheck 호출 → EARS SSO 폼 데이터 획득
-        menu_resp = await client.get(
-            SWS_MENU_AUTH_URL,
-            params={"menu": "출결현황 일반 교과목"},
-            headers=get_headers(SWS_MAIN_URL)
-        )
-
-        print(f"[EARS] MenuAuthCheck status={menu_resp.status_code}, len={len(menu_resp.text)}")
-
-        # MenuAuthCheck 응답에서 form 데이터 추출
-        form_match = re.search(
-            r'action=["\']([^"\']*LoginSSO[^"\']*)["\']',
-            menu_resp.text, re.IGNORECASE
-        )
-        id_match = re.search(r'name=["\']id["\']\s+value=["\']([^"\']+)["\']', menu_resp.text)
-        pw_match = re.search(r'name=["\']pw["\']\s+value=["\']([^"\']+)["\']', menu_resp.text)
-        type_match = re.search(r'name=["\']type["\']\s+value=["\']([^"\']+)["\']', menu_resp.text)
-
-        if not pw_match:
-            print(f"[EARS] MenuAuthCheck 응답에서 pw 못 찾음. 응답 앞부분: {menu_resp.text[:500]}")
-            raise HTTPException(status_code=401, detail="EARS SSO 자격 증명을 가져올 수 없습니다")
-
-        sso_id = id_match.group(1) if id_match else student_id
-        sso_pw = pw_match.group(1)
-        sso_type = type_match.group(1) if type_match else "3"
-
-        # 3. EARS SSO에 POST → redirect URL에서 suser_id, suser_name 추출
+        # 1. EARS SSO에 POST → redirect URL에서 suser_id, suser_name 추출
         sso_data = {
             "id": sso_id,
             "pw": sso_pw,
@@ -130,10 +74,10 @@ async def login_ears(student_id: str, password: str) -> dict:
         if not suser_id or not suser_name:
             raise HTTPException(status_code=401, detail="EARS SSO 토큰을 가져올 수 없습니다")
 
-        # 4. EARS index.html 접근 (JSESSIONID 쿠키 획득)
+        # 2. EARS index.html 접근 (JSESSIONID 쿠키 획득)
         await client.get(redirect_url, headers=headers, follow_redirects=True)
 
-        # 5. iwin_sin으로 EARS 로그인 + 수강과목 획득
+        # 3. iwin_sin으로 EARS 로그인 + 수강과목 획득
         ikey = f'{{"duser_id":"{suser_id}","duser_pw":"{suser_name}"}}'
         sin_resp = await client.post(
             f"{EARS_BASE_URL}/attend/iwin_sin",
@@ -190,6 +134,66 @@ async def login_ears(student_id: str, password: str) -> dict:
             "courses": courses,
             "user_info": sin_data.get("xuser"),
         }
+
+
+async def login_ears_with_sws_client(sws_client: httpx.AsyncClient, student_id: str) -> dict:
+    """이미 인증된 SWS client로 EARS 로그인 (sunmoon.py 로그인 플로우에서 호출)"""
+    from app.routers.sunmoon import SWS_MAIN_URL, get_headers
+
+    menu_resp = await sws_client.get(
+        SWS_MENU_AUTH_URL,
+        params={"menu": "출결현황 일반 교과목"},
+        headers=get_headers(SWS_MAIN_URL)
+    )
+
+    print(f"[EARS] MenuAuthCheck status={menu_resp.status_code}, len={len(menu_resp.text)}")
+
+    id_match = re.search(r'name=["\']id["\']\s+value=["\']([^"\']+)["\']', menu_resp.text)
+    pw_match = re.search(r'name=["\']pw["\']\s+value=["\']([^"\']+)["\']', menu_resp.text)
+    type_match = re.search(r'name=["\']type["\']\s+value=["\']([^"\']+)["\']', menu_resp.text)
+
+    if not pw_match:
+        print(f"[EARS] MenuAuthCheck 응답에서 pw 못 찾음. 응답 앞부분: {menu_resp.text[:300]}")
+        raise HTTPException(status_code=401, detail="EARS SSO 자격 증명을 가져올 수 없습니다")
+
+    sso_id = id_match.group(1) if id_match else student_id
+    sso_pw = pw_match.group(1)
+    sso_type = type_match.group(1) if type_match else "3"
+
+    return await _ears_sso_and_login(sso_id, sso_pw, sso_type, student_id)
+
+
+async def login_ears(student_id: str, password: str) -> dict:
+    """독립적 EARS 로그인 (SWS 로그인부터 수행, ensure_ears_session용)"""
+    async with httpx.AsyncClient(follow_redirects=True, verify=False, timeout=30.0) as client:
+        from app.routers.sunmoon import SWS_LOGIN_URL, SWS_MAIN_URL, get_headers
+
+        # SWS 로그인
+        login_page = await client.get(SWS_LOGIN_URL, headers=get_headers())
+
+        viewstate = ""
+        vs_match = re.search(r'id="__VIEWSTATE"\s+value="([^"]*)"', login_page.text)
+        if vs_match:
+            viewstate = vs_match.group(1)
+        viewstate_gen = ""
+        gen_match = re.search(r'id="__VIEWSTATEGENERATOR"\s+value="([^"]*)"', login_page.text)
+        if gen_match:
+            viewstate_gen = gen_match.group(1)
+
+        login_form = {
+            "__EVENTTARGET": "btnLogin",
+            "__EVENTARGUMENT": "",
+            "__VIEWSTATE": viewstate,
+            "__VIEWSTATEGENERATOR": viewstate_gen,
+            "__SCROLLPOSITIONX": "0",
+            "__SCROLLPOSITIONY": "0",
+            "txtID": student_id,
+            "txtPasswd": password
+        }
+        await client.post(SWS_LOGIN_URL, data=login_form, headers=get_headers(SWS_LOGIN_URL))
+
+        # MenuAuthCheck 호출
+        return await login_ears_with_sws_client(client, student_id)
 
 
 async def ensure_ears_session(user_id: int) -> dict:

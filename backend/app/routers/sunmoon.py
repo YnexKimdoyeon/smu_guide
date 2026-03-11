@@ -16,7 +16,7 @@ from app.models.user import User
 from app.models.schedule import Schedule
 from app.routers.gpt import get_gpt_session, session_cache as gpt_session_cache
 from app.routers.canvas import login_canvas, canvas_session_cache
-from app.routers.ears import login_ears, ears_session_cache
+from app.routers.ears import login_ears, login_ears_with_sws_client, ears_session_cache
 from app.routers.scholarship import folio_credentials_cache
 from app.core.session_store import save_credentials
 
@@ -530,9 +530,9 @@ async def login_with_sunmoon(
             except Exception as e:
                 print(f"[Canvas] 세션 자동 초기화 실패: {str(e)}")
 
-            # 10. EARS 출석 세션 자동 초기화
+            # 10. EARS 출석 세션 자동 초기화 (이미 인증된 SWS client 사용)
             try:
-                ears_session = await login_ears(login_data.student_id, login_data.password)
+                ears_session = await login_ears_with_sws_client(client, login_data.student_id)
                 ears_session_cache[user.id] = ears_session
                 save_credentials('ears', user.id, {
                     'student_id': login_data.student_id,
