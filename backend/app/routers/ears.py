@@ -74,13 +74,8 @@ async def login_ears(student_id: str, password: str) -> dict:
             "txtPasswd": password
         }
         login_resp = await client.post(SWS_LOGIN_URL, data=login_form, headers=get_headers(SWS_LOGIN_URL))
-        # SWS 로그인 후 redirect 따라가기 (세션 쿠키 확보)
-        if login_resp.status_code in (301, 302):
-            redirect_loc = login_resp.headers.get('Location', '')
-            if redirect_loc:
-                if redirect_loc.startswith('/'):
-                    redirect_loc = f"https://sws.sunmoon.ac.kr{redirect_loc}"
-                await client.get(redirect_loc, headers=get_headers(SWS_LOGIN_URL))
+        # SWS 메인 페이지 접근하여 세션 확립
+        await client.get(SWS_MAIN_URL, headers=get_headers(SWS_LOGIN_URL))
 
         # 2. SWS MenuAuthCheck 호출 → EARS SSO 폼 데이터 획득
         menu_resp = await client.get(
