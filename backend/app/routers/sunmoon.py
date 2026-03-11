@@ -16,6 +16,7 @@ from app.models.user import User
 from app.models.schedule import Schedule
 from app.routers.gpt import get_gpt_session, session_cache as gpt_session_cache
 from app.routers.canvas import login_canvas, canvas_session_cache
+from app.routers.ears import login_ears, ears_session_cache
 from app.routers.scholarship import folio_credentials_cache
 from app.core.session_store import save_credentials
 
@@ -529,7 +530,19 @@ async def login_with_sunmoon(
             except Exception as e:
                 print(f"[Canvas] 세션 자동 초기화 실패: {str(e)}")
 
-            # 10. Folio 자격증명 저장 (마일리지 조회용)
+            # 10. EARS 출석 세션 자동 초기화
+            try:
+                ears_session = await login_ears(login_data.student_id, login_data.password)
+                ears_session_cache[user.id] = ears_session
+                save_credentials('ears', user.id, {
+                    'student_id': login_data.student_id,
+                    'password': login_data.password
+                })
+                print(f"[EARS] 세션 자동 초기화 성공: user_id={user.id}")
+            except Exception as e:
+                print(f"[EARS] 세션 자동 초기화 실패: {str(e)}")
+
+            # 11. Folio 자격증명 저장 (마일리지 조회용)
             folio_credentials_cache[user.id] = {
                 'login_id': login_data.student_id,
                 'password': login_data.password

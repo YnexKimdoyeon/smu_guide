@@ -10,7 +10,7 @@ import random
 
 from app.core.database import engine, Base, SessionLocal
 from app.core.config import settings
-from app.routers import auth, schedule, chat, commute, announcement, phonebook, friend, sunmoon, random_chat, ws_chat, block, gpt, canvas, cafeteria, club, meeting, scholarship, notification, shuttle, admin, banner, dotori, quick_room
+from app.routers import auth, schedule, chat, commute, announcement, phonebook, friend, sunmoon, random_chat, ws_chat, block, gpt, canvas, cafeteria, club, meeting, scholarship, notification, shuttle, admin, banner, dotori, quick_room, ears
 from app.models.commute import CommuteSchedule, CommuteGroup, CommuteGroupMember
 from app.models.user import User
 from app.models.club import Club, ClubApplication
@@ -1155,6 +1155,7 @@ app.include_router(admin.router, prefix="/api")
 app.include_router(banner.router, prefix="/api")
 app.include_router(dotori.router, prefix="/api")
 app.include_router(quick_room.router, prefix="/api")
+app.include_router(ears.router, prefix="/api")
 app.include_router(ws_chat.router)
 
 

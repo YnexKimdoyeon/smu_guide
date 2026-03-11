@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { ArrowLeft, BookOpen, Video, FileText, MessageSquare, CheckCircle2, Clock, AlertCircle, Lock, Loader2, Bell, ChevronRight, LayoutList, Users, ClipboardList } from 'lucide-react'
+import { ArrowLeft, BookOpen, Video, FileText, MessageSquare, CheckCircle2, Clock, AlertCircle, Lock, Loader2, Bell, ChevronRight, LayoutList, Users, ClipboardList, CalendarCheck } from 'lucide-react'
 import { canvasAPI } from '@/lib/api'
+import { AttendanceScreen } from './attendance-screen'
 
 interface TodoItem {
   section_id: number
@@ -170,6 +171,9 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
   // 수업 계획서 관련 상태
   const [syllabusData, setSyllabusData] = useState<SyllabusData | null>(null)
   const [loadingSyllabus, setLoadingSyllabus] = useState(false)
+
+  // 출석 현황 화면
+  const [showAttendance, setShowAttendance] = useState(false)
 
   useEffect(() => {
     checkSessionAndLoad()
@@ -591,6 +595,11 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
   const getSelectedCourseTodos = () => {
     if (!selectedCourseId) return null
     return todos.find(t => t.course_id === selectedCourseId)
+  }
+
+  // 출석 현황 화면
+  if (showAttendance) {
+    return <AttendanceScreen onBack={() => setShowAttendance(false)} />
   }
 
   // 과목 상세 화면
@@ -1085,6 +1094,21 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
                 </div>
               </div>
             </div>
+
+            {/* 출석 현황 바로가기 */}
+            <button
+              onClick={() => setShowAttendance(true)}
+              className="w-full bg-card rounded-2xl p-4 border border-border/50 text-left hover:bg-muted/30 transition-colors flex items-center gap-3"
+            >
+              <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center flex-shrink-0">
+                <CalendarCheck className="w-5 h-5 text-green-600" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h4 className="font-medium text-foreground text-sm">출석 현황</h4>
+                <p className="text-xs text-muted-foreground">과목별 주차별 출석 상태 확인</p>
+              </div>
+              <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
+            </button>
 
             {/* 할 일 목록 */}
             {coursesWithTodos.length === 0 ? (

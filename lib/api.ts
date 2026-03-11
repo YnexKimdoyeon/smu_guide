@@ -593,6 +593,47 @@ export const canvasAPI = {
   },
 }
 
+// EARS 세션 자동 재인증 래퍼
+async function fetchEarsWithAutoRetry(endpoint: string, options: RequestInit = {}) {
+  try {
+    return await fetchAPI(endpoint, options)
+  } catch (error: any) {
+    if (error.message?.includes('세션') || error.message?.includes('401') || error.message?.includes('로그인')) {
+      const creds = getCredentials()
+      if (creds) {
+        try {
+          await fetchAPI('/sunmoon/login', {
+            method: 'POST',
+            body: JSON.stringify({ student_id: creds.studentId, password: creds.password }),
+          })
+          return await fetchAPI(endpoint, options)
+        } catch (retryError) {
+          throw error
+        }
+      }
+    }
+    throw error
+  }
+}
+
+// EARS 출석 API
+export const earsAPI = {
+  // 세션 상태 확인
+  getStatus: async () => {
+    return fetchAPI('/ears/status')
+  },
+
+  // 수강과목 목록 조회
+  getCourses: async () => {
+    return fetchEarsWithAutoRetry('/ears/courses')
+  },
+
+  // 모든 과목 출석 현황 일괄 조회
+  getAllAttendance: async () => {
+    return fetchEarsWithAutoRetry('/ears/attendance/all')
+  },
+}
+
 // 식단 API
 export const cafeteriaAPI = {
   // 식당 목록 조회
