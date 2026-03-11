@@ -299,13 +299,11 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
     const days = Math.floor(diff / (1000 * 60 * 60 * 24))
     const hours = Math.floor(diff / (1000 * 60 * 60))
 
-    if (diff < 0) {
-      return { text: '기한 만료', isUrgent: false, isPast: true }
-    } else if (hours < 24) {
+    if (hours < 24 && hours >= 0) {
       return { text: `${hours}시간 남음`, isUrgent: true, isPast: false }
-    } else if (days < 3) {
+    } else if (days < 3 && days >= 0) {
       return { text: `${days}일 남음`, isUrgent: true, isPast: false }
-    } else if (days < 7) {
+    } else if (days < 7 && days >= 0) {
       return { text: `${days}일 남음`, isUrgent: false, isPast: false }
     } else {
       return { text: due.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' }), isUrgent: false, isPast: false }
@@ -677,16 +675,6 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
                           <p className="text-sm font-medium text-foreground">
                             {item.title}
                           </p>
-                          <div className="flex items-center gap-1.5 mt-1">
-                            <Clock className="w-3 h-3 text-muted-foreground" />
-                            <span className={`text-xs ${
-                              due.isPast ? 'text-red-500' :
-                              due.isUrgent ? 'text-orange-500' :
-                              'text-muted-foreground'
-                            }`}>
-                              {due.text}
-                            </span>
-                          </div>
                         </div>
                       </div>
                     )
@@ -1131,16 +1119,6 @@ export function ElearningScreen({ onBack }: ElearningScreenProps) {
                               <p className="text-sm font-medium text-foreground truncate">
                                 {item.title}
                               </p>
-                              <div className="flex items-center gap-1.5 mt-1">
-                                <Clock className="w-3 h-3 text-muted-foreground" />
-                                <span className={`text-xs ${
-                                  due.isPast ? 'text-red-500' :
-                                  due.isUrgent ? 'text-orange-500' :
-                                  'text-muted-foreground'
-                                }`}>
-                                  {due.text}
-                                </span>
-                              </div>
                             </div>
                           </div>
                         )
