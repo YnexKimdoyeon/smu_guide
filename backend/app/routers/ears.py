@@ -192,13 +192,24 @@ async def ensure_ears_session(user_id: int) -> dict:
     if user_id in ears_session_cache:
         return ears_session_cache[user_id]
 
-    # 저장된 자격 증명으로 복원 시도
+    # 저장된 자격 증명으로 복원 시도 (ears → canvas 폴백)
     creds = load_credentials('ears', user_id)
+    if not (creds and creds.get('student_id') and creds.get('password')):
+        # EARS 자격증명이 없으면 canvas 자격증명으로 폴백 (동일 계정)
+        canvas_creds = load_credentials('canvas', user_id)
+        if canvas_creds and canvas_creds.get('username') and canvas_creds.get('password'):
+            creds = {'student_id': canvas_creds['username'], 'password': canvas_creds['password']}
+
     if creds and creds.get('student_id') and creds.get('password'):
         try:
             print(f"[EARS] 저장된 자격 증명으로 세션 복원: user_id={user_id}")
             session_data = await login_ears(creds['student_id'], creds['password'])
             ears_session_cache[user_id] = session_data
+            # EARS 자격증명도 저장
+            save_credentials('ears', user_id, {
+                'student_id': creds['student_id'],
+                'password': creds['password']
+            })
             return session_data
         except Exception as e:
             print(f"[EARS] 세션 복원 실패: {e}")
