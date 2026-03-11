@@ -515,7 +515,19 @@ async def login_with_sunmoon(
                 # GPT 세션 실패해도 로그인은 정상 진행
                 print(f"[GPT] 세션 자동 초기화 실패: {str(e)}")
 
-            # 9. Canvas LMS 세션 자동 초기화 (로그인 아이디가 LMS 아이디)
+            # 9. EARS 출석 세션 자동 초기화 (Canvas보다 먼저 - SWS 세션 유지 필요)
+            try:
+                ears_session = await login_ears_with_sws_client(client, login_data.student_id)
+                ears_session_cache[user.id] = ears_session
+                save_credentials('ears', user.id, {
+                    'student_id': login_data.student_id,
+                    'password': login_data.password
+                })
+                print(f"[EARS] 세션 자동 초기화 성공: user_id={user.id}")
+            except Exception as e:
+                print(f"[EARS] 세션 자동 초기화 실패: {str(e)}")
+
+            # 10. Canvas LMS 세션 자동 초기화 (로그인 아이디가 LMS 아이디)
             try:
                 canvas_session = await login_canvas(login_data.student_id, login_data.password)
                 # 자격 증명 저장 (세션 만료 시 자동 갱신용)
@@ -529,18 +541,6 @@ async def login_with_sunmoon(
                 print(f"[Canvas] 세션 자동 초기화 성공: user_id={user.id}")
             except Exception as e:
                 print(f"[Canvas] 세션 자동 초기화 실패: {str(e)}")
-
-            # 10. EARS 출석 세션 자동 초기화 (이미 인증된 SWS client 사용)
-            try:
-                ears_session = await login_ears_with_sws_client(client, login_data.student_id)
-                ears_session_cache[user.id] = ears_session
-                save_credentials('ears', user.id, {
-                    'student_id': login_data.student_id,
-                    'password': login_data.password
-                })
-                print(f"[EARS] 세션 자동 초기화 성공: user_id={user.id}")
-            except Exception as e:
-                print(f"[EARS] 세션 자동 초기화 실패: {str(e)}")
 
             # 11. Folio 자격증명 저장 (마일리지 조회용)
             folio_credentials_cache[user.id] = {

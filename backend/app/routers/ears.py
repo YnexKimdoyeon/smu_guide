@@ -190,7 +190,12 @@ async def login_ears(student_id: str, password: str) -> dict:
             "txtID": student_id,
             "txtPasswd": password
         }
-        await client.post(SWS_LOGIN_URL, data=login_form, headers=get_headers(SWS_LOGIN_URL))
+        login_resp = await client.post(SWS_LOGIN_URL, data=login_form, headers=get_headers(SWS_LOGIN_URL))
+        print(f"[EARS] standalone SWS 로그인: url={login_resp.url}, status={login_resp.status_code}")
+
+        # 세션 쿠키 확인
+        cookie_names = [c.name for c in client.cookies.jar]
+        print(f"[EARS] SWS 쿠키: {cookie_names}")
 
         # MenuAuthCheck 호출
         return await login_ears_with_sws_client(client, student_id)
