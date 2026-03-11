@@ -73,7 +73,14 @@ async def login_ears(student_id: str, password: str) -> dict:
             "txtID": student_id,
             "txtPasswd": password
         }
-        await client.post(SWS_LOGIN_URL, data=login_form, headers=get_headers(SWS_LOGIN_URL))
+        login_resp = await client.post(SWS_LOGIN_URL, data=login_form, headers=get_headers(SWS_LOGIN_URL))
+        # SWS 로그인 후 redirect 따라가기 (세션 쿠키 확보)
+        if login_resp.status_code in (301, 302):
+            redirect_loc = login_resp.headers.get('Location', '')
+            if redirect_loc:
+                if redirect_loc.startswith('/'):
+                    redirect_loc = f"https://sws.sunmoon.ac.kr{redirect_loc}"
+                await client.get(redirect_loc, headers=get_headers(SWS_LOGIN_URL))
 
         # 2. SWS MenuAuthCheck 호출 → EARS SSO 폼 데이터 획득
         menu_resp = await client.get(
@@ -81,6 +88,8 @@ async def login_ears(student_id: str, password: str) -> dict:
             params={"menu": "출결현황 일반 교과목"},
             headers=get_headers(SWS_MAIN_URL)
         )
+
+        print(f"[EARS] MenuAuthCheck status={menu_resp.status_code}, len={len(menu_resp.text)}")
 
         # MenuAuthCheck 응답에서 form 데이터 추출
         form_match = re.search(
@@ -92,6 +101,7 @@ async def login_ears(student_id: str, password: str) -> dict:
         type_match = re.search(r'name=["\']type["\']\s+value=["\']([^"\']+)["\']', menu_resp.text)
 
         if not pw_match:
+            print(f"[EARS] MenuAuthCheck 응답에서 pw 못 찾음. 응답 앞부분: {menu_resp.text[:500]}")
             raise HTTPException(status_code=401, detail="EARS SSO 자격 증명을 가져올 수 없습니다")
 
         sso_id = id_match.group(1) if id_match else student_id
