@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Search, UserPlus, Check, X, Clock, Calendar, User, Send, Trash2, Gift, Nut, Ban, Flag, AlertTriangle, MoreVertical } from 'lucide-react'
+import { Search, UserPlus, Check, X, Clock, Calendar, User, Send, Trash2, Gift, Nut, Ban, Flag, AlertTriangle, MoreVertical, CalendarDays } from 'lucide-react'
 import { AppShell } from './app-shell'
-import { friendAPI, dotoriAPI, blockAPI } from '@/lib/api'
+import { friendAPI, dotoriAPI, blockAPI, scheduleAPI } from '@/lib/api'
 import { useAlert } from './alert-context'
 
 interface Friend {
@@ -19,6 +19,17 @@ interface FreeTimeSlot {
   day: string
   start_time: string
   end_time: string
+}
+
+interface ScheduleItem {
+  id: number
+  day: string
+  start_time: string
+  end_time: string
+  subject: string
+  professor?: string
+  room?: string
+  color?: string
 }
 
 interface UserAction {
@@ -67,6 +78,12 @@ export function FriendsScreen({ onBack }: FriendsScreenProps) {
   const [giftTarget, setGiftTarget] = useState<Friend | null>(null)
   const [giftAmount, setGiftAmount] = useState('')
   const [giftLoading, setGiftLoading] = useState(false)
+
+  // 친구 시간표 보기
+  const [showScheduleModal, setShowScheduleModal] = useState(false)
+  const [scheduleTarget, setScheduleTarget] = useState<Friend | null>(null)
+  const [friendSchedule, setFriendSchedule] = useState<ScheduleItem[]>([])
+  const [scheduleLoading, setScheduleLoading] = useState(false)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -204,6 +221,22 @@ export function FriendsScreen({ onBack }: FriendsScreenProps) {
       showToast((error as Error).message, 'error')
     } finally {
       setGiftLoading(false)
+    }
+  }
+
+  // 친구 시간표 보기
+  const handleViewSchedule = async (friend: Friend) => {
+    setScheduleTarget(friend)
+    setScheduleLoading(true)
+    setShowScheduleModal(true)
+    try {
+      const data = await scheduleAPI.getFriendSchedule(friend.friend_id)
+      setFriendSchedule(data)
+    } catch (error) {
+      showToast('시간표를 불러올 수 없습니다', 'error')
+      setShowScheduleModal(false)
+    } finally {
+      setScheduleLoading(false)
     }
   }
 
@@ -412,10 +445,16 @@ export function FriendsScreen({ onBack }: FriendsScreenProps) {
                         </div>
                         <div className="flex-1 min-w-0 text-left">
                           <p className="text-sm font-medium text-foreground">{friend.friend_name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {friend.friend_student_id} | {friend.friend_department}
-                          </p>
+                          <p className="text-xs text-muted-foreground">{friend.friend_student_id}</p>
+                          <p className="text-xs text-muted-foreground">{friend.friend_department}</p>
                         </div>
+                      </button>
+                      <button
+                        onClick={() => handleViewSchedule(friend)}
+                        className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center hover:bg-blue-200 transition-colors shrink-0"
+                        aria-label="시간표 보기"
+                      >
+                        <CalendarDays className="w-4 h-4 text-blue-600" />
                       </button>
                       <button
                         onClick={() => handleOpenGiftModal(friend)}
@@ -709,6 +748,79 @@ export function FriendsScreen({ onBack }: FriendsScreenProps) {
                     {giftLoading ? '전송중...' : '선물하기'}
                   </button>
                 </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 친구 시간표 모달 */}
+        {showScheduleModal && scheduleTarget && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setShowScheduleModal(false)}>
+            <div
+              className="bg-card rounded-2xl overflow-hidden w-full max-w-md max-h-[80vh] shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="p-4 border-b border-border/50 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                    <CalendarDays className="w-5 h-5 text-blue-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-foreground">{scheduleTarget.friend_name}님의 시간표</h3>
+                    <p className="text-xs text-muted-foreground">{scheduleTarget.friend_department}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowScheduleModal(false)}
+                  className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center hover:bg-muted transition-colors"
+                >
+                  <X className="w-4 h-4 text-muted-foreground" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4">
+                {scheduleLoading ? (
+                  <div className="flex items-center justify-center py-12">
+                    <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
+                  </div>
+                ) : friendSchedule.length === 0 ? (
+                  <div className="text-center py-12">
+                    <Calendar className="w-10 h-10 text-muted-foreground/40 mx-auto mb-3" />
+                    <p className="text-muted-foreground text-sm">등록된 시간표가 없습니다</p>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-2">
+                    {['월', '화', '수', '목', '금'].map(day => {
+                      const daySchedules = friendSchedule
+                        .filter(s => s.day === day)
+                        .sort((a, b) => a.start_time.localeCompare(b.start_time))
+                      if (daySchedules.length === 0) return null
+                      return (
+                        <div key={day} className="mb-2">
+                          <p className="text-xs font-semibold text-muted-foreground mb-1.5">{day}요일</p>
+                          <div className="flex flex-col gap-1.5">
+                            {daySchedules.map(schedule => (
+                              <div
+                                key={schedule.id}
+                                className="p-3 rounded-xl border border-border/50"
+                                style={{ backgroundColor: schedule.color ? `${schedule.color}15` : undefined }}
+                              >
+                                <p className="text-sm font-medium text-foreground">{schedule.subject}</p>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  {schedule.start_time} ~ {schedule.end_time}
+                                  {schedule.room && ` · ${schedule.room}`}
+                                </p>
+                                {schedule.professor && (
+                                  <p className="text-xs text-muted-foreground">{schedule.professor}</p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             </div>
           </div>

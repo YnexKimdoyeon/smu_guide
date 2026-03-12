@@ -2,11 +2,13 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import or_, and_
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
 from app.models.user import User
 from app.models.schedule import Schedule
+from app.models.friend import Friend
 from app.schemas.schedule import ScheduleCreate, ScheduleUpdate, ScheduleResponse
 
 router = APIRouter(prefix="/schedules", tags=["시간표"])
@@ -98,6 +100,26 @@ def get_user_schedules(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """특정 사용자의 시간표 조회 (친구 공강 비교용)"""
+    """특정 사용자의 시간표 조회 (친구만 조회 가능)"""
+    # 본인 시간표는 바로 반환
+    if user_id == current_user.id:
+        schedules = db.query(Schedule).filter(Schedule.user_id == user_id).all()
+        return schedules
+
+    # 친구 관계 확인
+    friendship = db.query(Friend).filter(
+        or_(
+            and_(Friend.user_id == current_user.id, Friend.friend_id == user_id),
+            and_(Friend.user_id == user_id, Friend.friend_id == current_user.id)
+        ),
+        Friend.status == "accepted"
+    ).first()
+
+    if not friendship:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="친구만 시간표를 볼 수 있습니다"
+        )
+
     schedules = db.query(Schedule).filter(Schedule.user_id == user_id).all()
     return schedules

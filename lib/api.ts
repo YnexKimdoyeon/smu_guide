@@ -209,6 +209,11 @@ export const scheduleAPI = {
       method: 'DELETE',
     })
   },
+
+  // 친구 시간표 조회
+  getFriendSchedule: async (userId: number) => {
+    return fetchAPI(`/schedules/user/${userId}`)
+  },
 }
 
 // 채팅 API
