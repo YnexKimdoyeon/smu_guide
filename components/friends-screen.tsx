@@ -32,6 +32,36 @@ interface ScheduleItem {
   color?: string
 }
 
+const days = ['월', '화', '수', '목', '금']
+const timeSlots = ['09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00']
+
+function timeToRow(time: string): number {
+  const [h, m] = time.split(':').map(Number)
+  return (h - 9) * 2 + (m >= 30 ? 1 : 0)
+}
+
+function timeToRowEnd(time: string): number {
+  const [h, m] = time.split(':').map(Number)
+  const baseRow = (h - 9) * 2 + (m >= 30 ? 1 : 0)
+  if (m > 0 && m !== 30) return baseRow + 0.7
+  return baseRow
+}
+
+function rowSpan(start: string, end: string): number {
+  return Math.max(timeToRowEnd(end) - timeToRow(start), 1)
+}
+
+function getVisibleTimeSlots(schedules: ScheduleItem[]) {
+  if (schedules.length === 0) return timeSlots.slice(0, 8)
+  let maxEndHour = 17
+  schedules.forEach(s => {
+    const endHour = parseInt(s.end_time.split(':')[0])
+    if (endHour > maxEndHour) maxEndHour = endHour
+  })
+  const slotsNeeded = Math.min(maxEndHour - 9 + 1, timeSlots.length)
+  return timeSlots.slice(0, Math.max(slotsNeeded, 8))
+}
+
 interface UserAction {
   userId: number
   userName: string
@@ -755,19 +785,19 @@ export function FriendsScreen({ onBack }: FriendsScreenProps) {
 
         {/* 친구 시간표 모달 */}
         {showScheduleModal && scheduleTarget && (
-          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={() => setShowScheduleModal(false)}>
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-3" onClick={() => setShowScheduleModal(false)}>
             <div
-              className="bg-card rounded-2xl overflow-hidden w-full max-w-md max-h-[80vh] shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col"
+              className="bg-card rounded-2xl overflow-hidden w-full max-w-lg max-h-[90vh] shadow-2xl animate-in zoom-in-95 duration-200 flex flex-col"
               onClick={e => e.stopPropagation()}
             >
-              <div className="p-4 border-b border-border/50 flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                    <CalendarDays className="w-5 h-5 text-blue-600" />
+              <div className="p-3 border-b border-border/50 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                    <CalendarDays className="w-4 h-4 text-blue-600" />
                   </div>
                   <div>
-                    <h3 className="text-base font-bold text-foreground">{scheduleTarget.friend_name}님의 시간표</h3>
-                    <p className="text-xs text-muted-foreground">{scheduleTarget.friend_department}</p>
+                    <h3 className="text-sm font-bold text-foreground">{scheduleTarget.friend_name}님의 시간표</h3>
+                    <p className="text-[10px] text-muted-foreground">{scheduleTarget.friend_department}</p>
                   </div>
                 </div>
                 <button
@@ -778,7 +808,7 @@ export function FriendsScreen({ onBack }: FriendsScreenProps) {
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4">
+              <div className="flex-1 overflow-y-auto p-3">
                 {scheduleLoading ? (
                   <div className="flex items-center justify-center py-12">
                     <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin" />
@@ -789,37 +819,95 @@ export function FriendsScreen({ onBack }: FriendsScreenProps) {
                     <p className="text-muted-foreground text-sm">등록된 시간표가 없습니다</p>
                   </div>
                 ) : (
-                  <div className="flex flex-col gap-2">
-                    {['월', '화', '수', '목', '금'].map(day => {
-                      const daySchedules = friendSchedule
-                        .filter(s => s.day === day)
-                        .sort((a, b) => a.start_time.localeCompare(b.start_time))
-                      if (daySchedules.length === 0) return null
-                      return (
-                        <div key={day} className="mb-2">
-                          <p className="text-xs font-semibold text-muted-foreground mb-1.5">{day}요일</p>
-                          <div className="flex flex-col gap-1.5">
-                            {daySchedules.map(schedule => (
-                              <div
-                                key={schedule.id}
-                                className="p-3 rounded-xl border border-border/50"
-                                style={{ backgroundColor: schedule.color ? `${schedule.color}15` : undefined }}
-                              >
-                                <p className="text-sm font-medium text-foreground">{schedule.subject}</p>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                  {schedule.start_time} ~ {schedule.end_time}
-                                  {schedule.room && ` · ${schedule.room}`}
-                                </p>
-                                {schedule.professor && (
-                                  <p className="text-xs text-muted-foreground">{schedule.professor}</p>
-                                )}
-                              </div>
-                            ))}
-                          </div>
+                  <>
+                    {/* Timetable Grid - 메인 시간표와 동일 */}
+                    <div className="bg-card rounded-xl border border-border/50 overflow-hidden">
+                      {/* Day Headers */}
+                      <div className="grid grid-cols-[32px_repeat(5,1fr)] border-b border-border/50">
+                        <div className="h-7 flex items-center justify-center">
+                          <span className="text-[9px] text-muted-foreground">시간</span>
                         </div>
-                      )
-                    })}
-                  </div>
+                        {days.map((day) => (
+                          <div key={day} className="h-7 flex items-center justify-center border-l border-border/30">
+                            <span className="text-[11px] font-semibold text-foreground">{day}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Time Grid */}
+                      <div className="grid grid-cols-[32px_repeat(5,1fr)]">
+                        {/* Time Labels */}
+                        <div className="flex flex-col">
+                          {getVisibleTimeSlots(friendSchedule).map((time) => (
+                            <div key={time} className="h-14 flex items-start justify-center pt-0.5 border-t border-border/20">
+                              <span className="text-[8px] text-muted-foreground">{time}</span>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* Day Columns */}
+                        {days.map((day) => (
+                          <div key={day} className="relative border-l border-border/30">
+                            {/* Grid lines */}
+                            {getVisibleTimeSlots(friendSchedule).map((time) => (
+                              <div key={time} className="h-14 border-t border-border/20" />
+                            ))}
+
+                            {/* Schedule Items */}
+                            {friendSchedule
+                              .filter((item) => item.day === day)
+                              .map((item) => {
+                                const top = timeToRow(item.start_time) * 28
+                                const height = rowSpan(item.start_time, item.end_time) * 28
+                                const bgColor = item.color || '#6366f1'
+                                return (
+                                  <div
+                                    key={item.id}
+                                    className="absolute left-0.5 right-0.5 rounded px-1 py-0.5 overflow-hidden"
+                                    style={{
+                                      top: `${top}px`,
+                                      height: `${height}px`,
+                                      backgroundColor: bgColor + '20',
+                                      borderLeft: `2px solid ${bgColor}`,
+                                    }}
+                                  >
+                                    <p className="text-[9px] font-bold leading-tight truncate" style={{ color: bgColor }}>
+                                      {item.subject}
+                                    </p>
+                                    {item.room && (
+                                      <p className="text-[7px] text-muted-foreground truncate">
+                                        {item.room}
+                                      </p>
+                                    )}
+                                  </div>
+                                )
+                              })}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Legend */}
+                    <div className="mt-3 flex flex-col gap-1.5">
+                      <h3 className="text-xs font-semibold text-foreground">수업 목록</h3>
+                      <div className="flex flex-col gap-1.5">
+                        {[...new Map(friendSchedule.map(s => [s.subject, s])).values()].map((item) => (
+                          <div key={item.subject} className="flex items-center gap-2 p-2 bg-secondary/50 rounded-lg">
+                            <div
+                              className="w-2.5 h-2.5 rounded-full shrink-0"
+                              style={{ backgroundColor: item.color || '#6366f1' }}
+                            />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-medium text-foreground truncate">{item.subject}</p>
+                              <p className="text-[10px] text-muted-foreground truncate">
+                                {item.professor}{item.professor && item.room && ' | '}{item.room}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
                 )}
               </div>
             </div>
