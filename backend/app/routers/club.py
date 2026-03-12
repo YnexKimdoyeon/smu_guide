@@ -3,7 +3,7 @@
 """
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from pydantic import BaseModel
 
 from app.core.database import get_db
@@ -67,7 +67,11 @@ async def get_clubs(
     current_user: User = Depends(get_current_user)
 ):
     """동아리 목록 조회"""
-    clubs = db.query(Club).order_by(Club.created_at.desc()).all()
+    # joinedload로 N+1 쿼리 방지 (user, applications 미리 로드)
+    clubs = db.query(Club).options(
+        joinedload(Club.user),
+        joinedload(Club.applications)
+    ).order_by(Club.created_at.desc()).all()
 
     result = []
     for club in clubs:

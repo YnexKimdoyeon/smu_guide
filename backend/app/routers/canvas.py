@@ -2,6 +2,7 @@
 선문대 Canvas LMS API
 """
 import re
+import asyncio
 import base64
 import httpx
 from typing import Optional, Dict
@@ -96,7 +97,7 @@ async def login_canvas(username: str, password: str) -> dict:
     from bs4 import BeautifulSoup
     from urllib.parse import urlparse, parse_qs, unquote
 
-    async with httpx.AsyncClient(follow_redirects=True, verify=False, timeout=60.0) as client:
+    async with httpx.AsyncClient(follow_redirects=True, verify=False, timeout=25.0) as client:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36'
         }
@@ -304,7 +305,7 @@ async def _fetch_todos(session_data: dict) -> dict:
     cookies = session_data.get('cookies', {})
     xn_api_token = session_data.get('xn_api_token', '')
 
-    async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+    async with httpx.AsyncClient(verify=False, timeout=15.0) as client:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Accept': 'application/json',
@@ -359,7 +360,7 @@ async def _fetch_courses(session_data: dict):
     """courses API 호출 내부 함수"""
     cookies = session_data.get('cookies', {})
 
-    async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+    async with httpx.AsyncClient(verify=False, timeout=15.0) as client:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Accept': 'application/json'
@@ -411,7 +412,7 @@ async def _fetch_announcement(session_data: dict, course_id: int, topic_id: int)
 
     cookies = session_data.get('cookies', {})
 
-    async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+    async with httpx.AsyncClient(verify=False, timeout=15.0) as client:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
@@ -431,7 +432,7 @@ async def _fetch_announcements_list(session_data: dict, course_id: int):
     """과목별 공지사항 목록 조회 내부 함수"""
     cookies = session_data.get('cookies', {})
 
-    async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+    async with httpx.AsyncClient(verify=False, timeout=15.0) as client:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Accept': 'application/json'
@@ -487,33 +488,38 @@ async def parse_announcement_html(html: str, cookies: dict) -> dict:
         content_el = soup.find('div', class_='message user_content')
 
     if content_el:
-        # 이미지를 base64로 변환
-        async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
+        # 이미지를 base64로 변환 (병렬 처리)
+        images = content_el.find_all('img')
+        canvas_images = []
 
-            for img in content_el.find_all('img'):
-                src = img.get('src', '')
-                if src:
-                    try:
-                        # 상대 경로를 절대 경로로 변환
-                        if src.startswith('/'):
-                            src = f"https://canvas.sunmoon.ac.kr{src}"
+        for img in images:
+            src = img.get('src', '')
+            if src:
+                if src.startswith('/'):
+                    src = f"https://canvas.sunmoon.ac.kr{src}"
+                if 'canvas.sunmoon.ac.kr' in src:
+                    canvas_images.append((img, src))
+                img['style'] = 'max-width: 100%; height: auto;'
 
-                        # Canvas URL인 경우 이미지 가져와서 base64로 변환
-                        if 'canvas.sunmoon.ac.kr' in src:
-                            img_response = await client.get(src, headers=headers, cookies=cookies)
-                            if img_response.status_code == 200:
-                                content_type = img_response.headers.get('content-type', 'image/png')
-                                img_base64 = base64.b64encode(img_response.content).decode('utf-8')
-                                img['src'] = f"data:{content_type};base64,{img_base64}"
+        # Canvas 이미지들을 병렬로 다운로드
+        if canvas_images:
+            async def fetch_image(client, src):
+                try:
+                    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+                    response = await client.get(src, headers=headers, cookies=cookies)
+                    if response.status_code == 200:
+                        content_type = response.headers.get('content-type', 'image/png')
+                        img_base64 = base64.b64encode(response.content).decode('utf-8')
+                        return f"data:{content_type};base64,{img_base64}"
+                except Exception as e:
+                    print(f"[Canvas] 이미지 변환 실패: {src}, {e}")
+                return None
 
-                        # 스타일 추가하여 반응형으로
-                        img['style'] = 'max-width: 100%; height: auto;'
-                    except Exception as e:
-                        print(f"[Canvas] 이미지 변환 실패: {src}, {e}")
-                        # 실패 시 원본 URL 유지
+            async with httpx.AsyncClient(verify=False, timeout=15.0) as client:
+                results = await asyncio.gather(*[fetch_image(client, src) for _, src in canvas_images])
+                for (img, _), data_url in zip(canvas_images, results):
+                    if data_url:
+                        img['src'] = data_url
 
         # 링크를 새 탭에서 열리도록 처리
         for link in content_el.find_all('a'):
@@ -603,7 +609,7 @@ async def _fetch_boards(session_data: dict, course_id: int):
     cookies = session_data.get('cookies', {})
     xn_api_token = session_data.get('xn_api_token', '')
 
-    async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+    async with httpx.AsyncClient(verify=False, timeout=15.0) as client:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Accept': 'application/json',
@@ -625,7 +631,7 @@ async def _fetch_board_posts(session_data: dict, course_id: int, board_id: int):
     cookies = session_data.get('cookies', {})
     xn_api_token = session_data.get('xn_api_token', '')
 
-    async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+    async with httpx.AsyncClient(verify=False, timeout=15.0) as client:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Accept': 'application/json',
@@ -702,7 +708,7 @@ async def _fetch_course_users(session_data: dict, course_id: int):
     """과목 수강생 목록 조회 내부 함수"""
     cookies = session_data.get('cookies', {})
 
-    async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+    async with httpx.AsyncClient(verify=False, timeout=15.0) as client:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Accept': 'application/json',
@@ -752,7 +758,7 @@ async def _fetch_syllabus(session_data: dict, course_id: int):
     """수업 계획서 페이지 HTML 조회 내부 함수"""
     cookies = session_data.get('cookies', {})
 
-    async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+    async with httpx.AsyncClient(verify=False, timeout=15.0) as client:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'

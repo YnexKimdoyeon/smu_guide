@@ -3,6 +3,7 @@
 SSO 플로우: SWS MenuAuthCheck → EARS SSO LoginSSO.jsp → iwin_sin → 세션 확보
 """
 import re
+import asyncio
 import httpx
 from typing import Dict
 from urllib.parse import urlparse, parse_qs, unquote
@@ -42,7 +43,7 @@ async def _ears_sso_and_login(sso_id: str, sso_pw: str, sso_type: str, student_i
     """
     EARS SSO 인증 + iwin_sin 로그인 (SWS에서 받은 SSO 데이터 사용)
     """
-    async with httpx.AsyncClient(follow_redirects=False, verify=False, timeout=30.0) as client:
+    async with httpx.AsyncClient(follow_redirects=False, verify=False, timeout=20.0) as client:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36'
         }
@@ -184,7 +185,7 @@ async def login_ears(student_id: str, password: str) -> dict:
     SWS_BASE = "https://sws.sunmoon.ac.kr"
     ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36'
 
-    async with httpx.AsyncClient(follow_redirects=False, verify=False, timeout=30.0) as client:
+    async with httpx.AsyncClient(follow_redirects=False, verify=False, timeout=20.0) as client:
         # 1. GET Login.aspx (쿠키 + viewstate)
         login_page = await client.get(f"{SWS_BASE}/Login.aspx", headers={'User-Agent': ua})
 
@@ -294,7 +295,7 @@ async def ensure_ears_session(user_id: int) -> dict:
 async def _fetch_attendance(cookies: dict, dclass: str, duser_id: str) -> dict:
     """EARS 출석부 API 호출 (세션 쿠키 사용)"""
     ikey = f'{{"dclass":"{dclass}","duser_id":"{duser_id}"}}'
-    async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+    async with httpx.AsyncClient(verify=False, timeout=20.0) as client:
         response = await client.post(
             f"{EARS_BASE_URL}/attend/iwin_st_chulseokbu",
             data={"ikey": ikey},
@@ -396,32 +397,40 @@ async def get_ears_courses(current_user: User = Depends(get_current_user)):
 
 @router.get("/attendance/all")
 async def get_all_attendance(current_user: User = Depends(get_current_user)):
-    """모든 수강과목의 출석 현황 일괄 조회"""
+    """모든 수강과목의 출석 현황 일괄 조회 (병렬 처리)"""
     session = await ensure_ears_session(current_user.id)
     cookies = session.get("cookies", {})
     courses = session.get("courses", [])
     student_id = current_user.student_id
 
-    results = []
-    for course in courses:
-        # 각 과목의 첫 번째 sugang_code로 출석 조회
-        if not course.get("sugang_codes"):
-            continue
+    # 유효한 과목만 필터링
+    valid_courses = [c for c in courses if c.get("sugang_codes")]
+    if not valid_courses:
+        return {"courses": []}
+
+    # 모든 과목 출석을 병렬로 조회
+    async def fetch_one(course):
         dclass = course["sugang_codes"][0]
         try:
             data = await _fetch_attendance(cookies, dclass, student_id)
             if data.get("xidedu", {}).get("xmsg") == "NoLogin":
-                # 세션 만료 - 재로그인 시도
-                if current_user.id in ears_session_cache:
-                    del ears_session_cache[current_user.id]
-                raise HTTPException(status_code=401, detail="EARS 세션이 만료되었습니다.")
+                return {"error": "session_expired"}
             attendance = _process_attendance(data, student_id)
-            attendance["color"] = None  # 프론트에서 할당
-            results.append(attendance)
-        except HTTPException:
-            raise
+            attendance["color"] = None
+            return attendance
         except Exception as e:
             print(f"[EARS] 출석 조회 실패: {dclass}, {e}")
-            continue
+            return None
 
+    fetch_results = await asyncio.gather(*[fetch_one(c) for c in valid_courses])
+
+    # 세션 만료 체크
+    for r in fetch_results:
+        if isinstance(r, dict) and r.get("error") == "session_expired":
+            if current_user.id in ears_session_cache:
+                del ears_session_cache[current_user.id]
+            raise HTTPException(status_code=401, detail="EARS 세션이 만료되었습니다.")
+
+    # 성공한 결과만 반환
+    results = [r for r in fetch_results if r and not isinstance(r, dict) or (isinstance(r, dict) and "error" not in r)]
     return {"courses": results}

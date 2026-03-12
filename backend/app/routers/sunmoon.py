@@ -2,6 +2,7 @@
 선문대학교 종합정보시스템 연동 라우터
 """
 import re
+import asyncio
 import httpx
 from typing import Optional
 from datetime import datetime, timedelta
@@ -505,45 +506,53 @@ async def login_with_sunmoon(
             # 7. JWT 토큰 발급
             access_token = create_access_token(data={"sub": str(user.id)})
 
-            # 8. GPT 세션 자동 초기화 (실패해도 로그인은 성공)
-            # GPT 로그인은 사용자가 입력한 로그인 ID를 사용해야 함 (학번이 아님)
-            try:
-                gpt_cookies = await get_gpt_session(login_data.student_id, login_data.password)
-                gpt_session_cache[user.id] = gpt_cookies
-                print(f"[GPT] 세션 자동 초기화 성공: user_id={user.id}")
-            except Exception as e:
-                # GPT 세션 실패해도 로그인은 정상 진행
-                print(f"[GPT] 세션 자동 초기화 실패: {str(e)}")
+            # 8-10. 세션 자동 초기화 (GPT, EARS, Canvas 병렬 실행)
+            # 각 세션 실패해도 로그인은 성공 처리
+            async def init_gpt():
+                try:
+                    cookies = await get_gpt_session(login_data.student_id, login_data.password)
+                    gpt_session_cache[user.id] = cookies
+                    print(f"[GPT] 세션 자동 초기화 성공: user_id={user.id}")
+                    return cookies
+                except Exception as e:
+                    print(f"[GPT] 세션 자동 초기화 실패: {str(e)}")
+                    return None
 
-            # 9. EARS 출석 세션 자동 초기화 (Canvas보다 먼저 - SWS 세션 유지 필요)
-            try:
-                ears_session = await login_ears_with_sws_client(client, login_data.student_id)
-                ears_session_cache[user.id] = ears_session
-                save_data = {
-                    'student_id': login_data.student_id,
-                    'password': login_data.password
-                }
-                if ears_session.get('sso_data'):
-                    save_data.update(ears_session['sso_data'])
-                save_credentials('ears', user.id, save_data)
-                print(f"[EARS] 세션 자동 초기화 성공: user_id={user.id}")
-            except Exception as e:
-                print(f"[EARS] 세션 자동 초기화 실패: {str(e)}")
+            async def init_ears():
+                try:
+                    session = await login_ears_with_sws_client(client, login_data.student_id)
+                    ears_session_cache[user.id] = session
+                    save_data = {
+                        'student_id': login_data.student_id,
+                        'password': login_data.password
+                    }
+                    if session.get('sso_data'):
+                        save_data.update(session['sso_data'])
+                    save_credentials('ears', user.id, save_data)
+                    print(f"[EARS] 세션 자동 초기화 성공: user_id={user.id}")
+                    return session
+                except Exception as e:
+                    print(f"[EARS] 세션 자동 초기화 실패: {str(e)}")
+                    return None
 
-            # 10. Canvas LMS 세션 자동 초기화 (로그인 아이디가 LMS 아이디)
-            try:
-                canvas_session = await login_canvas(login_data.student_id, login_data.password)
-                # 자격 증명 저장 (세션 만료 시 자동 갱신용)
-                canvas_session['username'] = login_data.student_id
-                canvas_session['password'] = login_data.password
-                canvas_session_cache[user.id] = canvas_session
-                save_credentials('canvas', user.id, {
-                    'username': login_data.student_id,
-                    'password': login_data.password
-                })
-                print(f"[Canvas] 세션 자동 초기화 성공: user_id={user.id}")
-            except Exception as e:
-                print(f"[Canvas] 세션 자동 초기화 실패: {str(e)}")
+            async def init_canvas():
+                try:
+                    session = await login_canvas(login_data.student_id, login_data.password)
+                    session['username'] = login_data.student_id
+                    session['password'] = login_data.password
+                    canvas_session_cache[user.id] = session
+                    save_credentials('canvas', user.id, {
+                        'username': login_data.student_id,
+                        'password': login_data.password
+                    })
+                    print(f"[Canvas] 세션 자동 초기화 성공: user_id={user.id}")
+                    return session
+                except Exception as e:
+                    print(f"[Canvas] 세션 자동 초기화 실패: {str(e)}")
+                    return None
+
+            # 병렬 실행으로 로그인 속도 개선
+            await asyncio.gather(init_gpt(), init_ears(), init_canvas())
 
             # 11. Folio 자격증명 저장 (마일리지 조회용)
             folio_credentials_cache[user.id] = {

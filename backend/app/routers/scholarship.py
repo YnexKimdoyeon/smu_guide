@@ -170,7 +170,7 @@ async def get_mileage(
                 detail="세션이 만료되었습니다. 앱을 재시작하거나 다시 로그인해주세요."
             )
 
-    async with httpx.AsyncClient(verify=False, timeout=30.0, follow_redirects=True) as client:
+    async with httpx.AsyncClient(verify=False, timeout=20.0, follow_redirects=True) as client:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Content-Type': 'application/x-www-form-urlencoded',

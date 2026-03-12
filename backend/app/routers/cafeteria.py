@@ -154,7 +154,7 @@ async def fetch_cafeteria_menu(ca: str, day: Optional[str] = None) -> dict:
     if day:
         url += f"&day={day}"
 
-    async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+    async with httpx.AsyncClient(verify=False, timeout=15.0) as client:
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
         }

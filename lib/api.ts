@@ -1,6 +1,68 @@
 // API 클라이언트
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api'
 
+// 타임아웃 및 재시도 설정
+const REQUEST_TIMEOUT = 30000 // 30초
+const MAX_RETRIES = 2
+const RETRY_DELAY = 1000 // 1초 (지수 백오프 적용)
+
+// 타임아웃이 적용된 fetch
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeout: number = REQUEST_TIMEOUT
+): Promise<Response> {
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), timeout)
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    })
+    return response
+  } finally {
+    clearTimeout(timeoutId)
+  }
+}
+
+// 재시도 로직이 적용된 fetch
+async function fetchWithRetry(
+  url: string,
+  options: RequestInit,
+  retries: number = MAX_RETRIES
+): Promise<Response> {
+  let lastError: Error | null = null
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fetchWithTimeout(url, options)
+    } catch (error: any) {
+      lastError = error
+
+      // AbortError(타임아웃) 또는 네트워크 에러만 재시도
+      const isRetryable =
+        error.name === 'AbortError' ||
+        error.name === 'TypeError' ||
+        error.message?.includes('fetch')
+
+      if (!isRetryable || attempt === retries) {
+        break
+      }
+
+      // 지수 백오프: 1초, 2초, 4초...
+      const delay = RETRY_DELAY * Math.pow(2, attempt)
+      await new Promise((resolve) => setTimeout(resolve, delay))
+    }
+  }
+
+  // 사용자 친화적 에러 메시지
+  if (lastError?.name === 'AbortError') {
+    throw new Error('서버 응답 시간 초과. 네트워크 상태를 확인해주세요.')
+  }
+  throw lastError || new Error('네트워크 오류가 발생했습니다.')
+}
+
 // 토큰 저장/조회
 export const getToken = () => {
   if (typeof window !== 'undefined') {
@@ -60,7 +122,7 @@ async function fetchAPI(endpoint: string, options: RequestInit = {}) {
     (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+  const response = await fetchWithRetry(`${API_BASE_URL}${endpoint}`, {
     ...options,
     headers,
   })
@@ -920,7 +982,7 @@ async function fetchAdminAPI(endpoint: string, options: RequestInit = {}) {
     (headers as Record<string, string>)['X-Admin-Token'] = adminToken
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+  const response = await fetchWithRetry(`${API_BASE_URL}${endpoint}`, {
     ...options,
     headers,
   })
