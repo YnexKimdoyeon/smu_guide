@@ -373,23 +373,31 @@ def search_users(
         )
     ).limit(20).all()
 
+    if not users:
+        return []
+
+    # 배치로 친구 관계 조회 (N+1 쿼리 방지)
+    user_ids = [u.id for u in users]
+    friend_relations = db.query(Friend).filter(
+        or_(
+            and_(Friend.user_id == current_user.id, Friend.friend_id.in_(user_ids)),
+            and_(Friend.user_id.in_(user_ids), Friend.friend_id == current_user.id)
+        )
+    ).all()
+
+    # 관계 맵 생성
+    relation_map = {}
+    for f in friend_relations:
+        other_id = f.friend_id if f.user_id == current_user.id else f.user_id
+        relation_map[other_id] = f.status
+
     result = []
     for user in users:
-        # 이미 친구인지 확인
-        existing = db.query(Friend).filter(
-            or_(
-                and_(Friend.user_id == current_user.id, Friend.friend_id == user.id),
-                and_(Friend.user_id == user.id, Friend.friend_id == current_user.id)
-            )
-        ).first()
-
-        status = existing.status if existing else None
-
         result.append(FriendResponse(
             id=0,
             user_id=current_user.id,
             friend_id=user.id,
-            status=status or "none",
+            status=relation_map.get(user.id, "none"),
             created_at=user.created_at,
             friend_name=user.name,
             friend_student_id=user.student_id,

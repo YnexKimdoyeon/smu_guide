@@ -157,16 +157,18 @@ def get_chat_rooms(
 
     all_rooms = [global_room] + subject_rooms
 
-    # 과목별 수강생 수 계산
+    # 과목별 수강생 수 계산 (SQL 집계로 최적화)
     subject_participant_counts = {}
     if my_subject_keys:
-        # 각 과목 키에 해당하는 사용자 수 조회
-        all_schedules = db.query(Schedule).all()
-        for schedule in all_schedules:
-            key = generate_subject_key(schedule)
-            if key not in subject_participant_counts:
-                subject_participant_counts[key] = set()
-            subject_participant_counts[key].add(schedule.user_id)
+        # SQL에서 직접 집계 (전체 시간표 메모리 로드 방지)
+        from sqlalchemy import case, literal_column
+        subject_counts = db.query(
+            func.concat(Schedule.subject, '|', func.coalesce(Schedule.professor, '')).label('key'),
+            func.count(distinct(Schedule.user_id)).label('count')
+        ).filter(
+            func.concat(Schedule.subject, '|', func.coalesce(Schedule.professor, '')).in_(my_subject_keys)
+        ).group_by('key').all()
+        subject_participant_counts = {row.key: row.count for row in subject_counts}
 
     # 결과 구성
     result = []

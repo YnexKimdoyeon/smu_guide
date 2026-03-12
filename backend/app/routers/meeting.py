@@ -67,23 +67,42 @@ async def get_my_meetings(
 ):
     """내가 작성한 과팅 목록 + 내가 신청해서 매칭된 과팅 (최신 활동순)"""
     from sqlalchemy import func
+    from sqlalchemy.orm import joinedload
 
-    result = []
-
-    # 내가 작성한 과팅
-    my_meetings = db.query(Meeting).filter(
+    # 내가 작성한 과팅 (applications 미리 로드)
+    my_meetings = db.query(Meeting).options(
+        joinedload(Meeting.applications)
+    ).filter(
         Meeting.user_id == current_user.id
     ).all()
 
-    for meeting in my_meetings:
-        # 마지막 채팅 시간 조회
-        last_chat_time = None
-        if meeting.chat_room_id:
-            last_msg = db.query(func.max(ChatMessage.created_at)).filter(
-                ChatMessage.room_id == meeting.chat_room_id
-            ).scalar()
-            last_chat_time = last_msg
+    # 내가 신청해서 매칭된 과팅 (meeting 미리 로드)
+    matched_applications = db.query(MeetingApplication).options(
+        joinedload(MeetingApplication.meeting).joinedload(Meeting.applications)
+    ).filter(
+        MeetingApplication.user_id == current_user.id,
+        MeetingApplication.is_matched == 1
+    ).all()
 
+    # 모든 채팅방 ID 수집
+    all_meetings = my_meetings + [app.meeting for app in matched_applications if app.meeting]
+    room_ids = [m.chat_room_id for m in all_meetings if m.chat_room_id]
+
+    # 배치로 마지막 채팅 시간 조회 (N+1 쿼리 방지)
+    last_chat_map = {}
+    if room_ids:
+        last_chats = db.query(
+            ChatMessage.room_id,
+            func.max(ChatMessage.created_at).label('last_time')
+        ).filter(
+            ChatMessage.room_id.in_(room_ids)
+        ).group_by(ChatMessage.room_id).all()
+        last_chat_map = {c.room_id: c.last_time for c in last_chats}
+
+    result = []
+
+    for meeting in my_meetings:
+        last_chat_time = last_chat_map.get(meeting.chat_room_id)
         result.append({
             "id": meeting.id,
             "user_id": meeting.user_id,
@@ -100,23 +119,10 @@ async def get_my_meetings(
             "is_applicant": False
         })
 
-    # 내가 신청해서 매칭된 과팅
-    matched_applications = db.query(MeetingApplication).filter(
-        MeetingApplication.user_id == current_user.id,
-        MeetingApplication.is_matched == 1
-    ).all()
-
     for app in matched_applications:
         meeting = app.meeting
         if meeting:
-            # 마지막 채팅 시간 조회
-            last_chat_time = None
-            if meeting.chat_room_id:
-                last_msg = db.query(func.max(ChatMessage.created_at)).filter(
-                    ChatMessage.room_id == meeting.chat_room_id
-                ).scalar()
-                last_chat_time = last_msg
-
+            last_chat_time = last_chat_map.get(meeting.chat_room_id)
             result.append({
                 "id": meeting.id,
                 "user_id": meeting.user_id,

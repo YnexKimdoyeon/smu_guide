@@ -3,11 +3,12 @@
 """
 from datetime import datetime
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, or_
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
+from app.core.cache import smart_cache_get, smart_cache_set
 from app.models.user import User
 from app.models.notification import AppLastViewed
 from app.models.friend import Friend
@@ -16,6 +17,8 @@ from app.models.meeting import Meeting, MeetingApplication
 from app.models.chat import ChatMessage, ChatRoomMember
 
 router = APIRouter(prefix="/notifications", tags=["알림"])
+
+BADGE_CACHE_TTL = 60  # 1분 캐시
 
 
 def get_last_viewed(db: Session, user_id: int, app_id: str) -> datetime:
@@ -36,7 +39,13 @@ async def get_notification_badges(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """각 앱의 알림 배지 수 조회"""
+    """각 앱의 알림 배지 수 조회 (캐싱 적용)"""
+    # 캐시 확인 (1분)
+    cache_key = f"badges:{current_user.id}"
+    cached = smart_cache_get(cache_key)
+    if cached:
+        return cached
+
     badges = {}
 
     # 1. 친구 관리 - 받은 친구 요청 중 pending 상태
@@ -74,27 +83,24 @@ async def get_notification_badges(
         Meeting.updated_at > community_last
     ).count()
 
-    # 내 매칭된 과팅 채팅방에 새 메시지
+    # 내 매칭된 과팅 채팅방에 새 메시지 (joinedload로 N+1 방지)
     # 1) 내가 작성한 매칭된 과팅
-    my_matched_meetings = db.query(Meeting).filter(
+    my_matched_meetings = db.query(Meeting.chat_room_id).filter(
         Meeting.user_id == current_user.id,
         Meeting.status == "matched",
         Meeting.chat_room_id.isnot(None)
     ).all()
 
-    # 2) 내가 신청해서 매칭된 과팅
-    my_matched_apps = db.query(MeetingApplication).filter(
+    # 2) 내가 신청해서 매칭된 과팅 (JOIN으로 한 번에 조회)
+    my_matched_apps = db.query(Meeting.chat_room_id).join(
+        MeetingApplication, Meeting.id == MeetingApplication.meeting_id
+    ).filter(
         MeetingApplication.user_id == current_user.id,
-        MeetingApplication.is_matched == 1
+        MeetingApplication.is_matched == 1,
+        Meeting.chat_room_id.isnot(None)
     ).all()
 
-    matched_room_ids = []
-    for m in my_matched_meetings:
-        if m.chat_room_id:
-            matched_room_ids.append(m.chat_room_id)
-    for app in my_matched_apps:
-        if app.meeting and app.meeting.chat_room_id:
-            matched_room_ids.append(app.meeting.chat_room_id)
+    matched_room_ids = [m[0] for m in my_matched_meetings] + [m[0] for m in my_matched_apps]
 
     # 새 채팅 메시지 수 (내가 보낸 것 제외)
     new_chat_count = 0
@@ -109,6 +115,8 @@ async def get_notification_badges(
     if community_total > 0:
         badges["community"] = community_total
 
+    # 캐시 저장 (1분)
+    smart_cache_set(cache_key, badges, BADGE_CACHE_TTL)
     return badges
 
 
