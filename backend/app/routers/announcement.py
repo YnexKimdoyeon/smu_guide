@@ -23,13 +23,22 @@ def get_announcements(
     category: Optional[str] = Query(None, description="카테고리 필터"),
     db: Session = Depends(get_db)
 ):
-    """공지사항 목록 조회"""
+    """공지사항 목록 조회 (캐싱 적용)"""
+    # 캐시 확인
+    cache_key = f"{CACHE_KEY_LIST}:{category or 'all'}"
+    cached = smart_cache_get(cache_key)
+    if cached:
+        return cached
+
     query = db.query(Announcement)
 
     if category:
         query = query.filter(Announcement.category == category)
 
     announcements = query.order_by(desc(Announcement.notice_date)).all()
+
+    # 캐시 저장 (10분)
+    smart_cache_set(cache_key, announcements, CACHE_EXPIRE)
     return announcements
 
 
@@ -38,7 +47,13 @@ def get_announcement(
     announcement_id: int,
     db: Session = Depends(get_db)
 ):
-    """공지사항 상세 조회"""
+    """공지사항 상세 조회 (캐싱 적용)"""
+    # 캐시 확인
+    cache_key = f"{CACHE_KEY_DETAIL}:{announcement_id}"
+    cached = smart_cache_get(cache_key)
+    if cached:
+        return cached
+
     announcement = db.query(Announcement).filter(
         Announcement.id == announcement_id
     ).first()
@@ -49,6 +64,8 @@ def get_announcement(
             detail="공지사항을 찾을 수 없습니다"
         )
 
+    # 캐시 저장 (10분)
+    smart_cache_set(cache_key, announcement, CACHE_EXPIRE)
     return announcement
 
 
@@ -65,6 +82,8 @@ def create_announcement(
     db.commit()
     db.refresh(new_announcement)
 
+    # 목록 캐시 무효화
+    cache_delete_pattern(CACHE_KEY_LIST)
     return new_announcement
 
 
@@ -93,6 +112,9 @@ def update_announcement(
     db.commit()
     db.refresh(announcement)
 
+    # 캐시 무효화
+    cache_delete_pattern(CACHE_KEY_LIST)
+    cache_delete_pattern(f"{CACHE_KEY_DETAIL}:{announcement_id}")
     return announcement
 
 
@@ -115,3 +137,7 @@ def delete_announcement(
 
     db.delete(announcement)
     db.commit()
+
+    # 캐시 무효화
+    cache_delete_pattern(CACHE_KEY_LIST)
+    cache_delete_pattern(f"{CACHE_KEY_DETAIL}:{announcement_id}")
